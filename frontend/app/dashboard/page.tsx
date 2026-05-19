@@ -376,12 +376,12 @@ export default function DashboardPage() {
                         {p.check_in_time && (
                           <p className="text-sm text-gray-600">
                             Ankommet: {p.check_in_time.slice(0, 5)}
-                            {p.check_out_time && ` → Gået: ${p.check_out_time.slice(0, 5)}`}
+                            {p.check_out_time && ` — Gået: ${p.check_out_time.slice(0, 5)}`}
                           </p>
                         )}
                         {!p.check_in_time && p.planned_start && (
                           <p className="text-sm text-gray-400">
-                            Planlagt: {p.planned_start.slice(0, 5)} – {p.planned_end?.slice(0, 5) || "?"}
+                            Planlagt: {p.planned_start.slice(0, 5)} — {p.planned_end?.slice(0, 5) || "?"}
                           </p>
                         )}
                         <p className="text-sm text-gray-600">
