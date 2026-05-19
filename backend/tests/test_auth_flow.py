@@ -93,10 +93,7 @@ class TestAuthFlowIdentitySelection:
         flow_id = "test-identity-flow"
         auth_service._flows[flow_id] = {
             "status": AuthFlowStatus.IDENTITY_SELECTION,
-            "identities": [
-                {"id": 1, "name": "Parent"},
-                {"id": 2, "name": "Guardian"},
-            ],
+            "identities": ["Parent", "Guardian"],
             "identity_event": threading.Event(),
             "selected_identity": None,
         }

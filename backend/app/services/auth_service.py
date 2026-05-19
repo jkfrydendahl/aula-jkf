@@ -15,7 +15,12 @@ class AuthService:
 
     def __init__(self, token_repository: TokenRepository, login_client_class=None):
         self._token_repository = token_repository
-        self._login_client_class = login_client_class
+        # Default to real AulaLoginClient if not injected (for testing)
+        if login_client_class is None:
+            from app.aula_login_client.client import AulaLoginClient
+            self._login_client_class = AulaLoginClient
+        else:
+            self._login_client_class = login_client_class
         self._flows: dict = {}
 
     def start_flow(self, username: str, auth_method: str = "APP",
@@ -24,9 +29,14 @@ class AuthService:
         flow_id = str(uuid.uuid4())
         self._flows[flow_id] = {
             "status": AuthFlowStatus.PENDING,
+            "message": "Starting MitID authentication...",
             "error": None,
-            "thread": None,
+            "identities": None,
+            "selected_identity": None,
+            "identity_event": threading.Event(),
             "done_event": threading.Event(),
+            "thread": None,
+            "qr_data": None,
         }
 
         thread = threading.Thread(
@@ -71,6 +81,25 @@ class AuthService:
                 mitid_token=token,
             )
 
+            # Set up identity selector callback that blocks until frontend responds
+            def identity_selector(identity_names):
+                flow["status"] = AuthFlowStatus.IDENTITY_SELECTION
+                flow["identities"] = identity_names
+                flow["message"] = "Vælg identitet"
+                _LOGGER.info(f"Flow {flow_id}: waiting for identity selection from {identity_names}")
+
+                # Block until the frontend selects an identity
+                flow["identity_event"].wait(timeout=120)
+
+                selected = flow.get("selected_identity", 1)
+                _LOGGER.info(f"Flow {flow_id}: identity {selected} selected")
+                flow["status"] = AuthFlowStatus.PENDING
+                flow["message"] = "Completing login..."
+                return str(selected)
+
+            client.identity_selector = identity_selector
+
+            flow["message"] = "Godkend i MitID app..."
             result = client.authenticate()
 
             if result.get("success"):
@@ -83,6 +112,8 @@ class AuthService:
                 )
                 self._token_repository.save(token_model)
                 flow["status"] = AuthFlowStatus.COMPLETE
+                flow["message"] = "Login successful"
+                _LOGGER.info(f"Flow {flow_id}: authentication complete")
             else:
                 flow["status"] = AuthFlowStatus.ERROR
                 flow["error"] = "Authentication failed"
@@ -93,6 +124,7 @@ class AuthService:
         except Exception as e:
             flow["status"] = AuthFlowStatus.ERROR
             flow["error"] = str(e)
+            _LOGGER.error(f"Flow {flow_id}: auth failed: {e}")
         finally:
             done_event = flow.get("done_event")
             if done_event:

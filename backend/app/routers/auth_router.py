@@ -32,7 +32,9 @@ def create_auth_router(auth_service: AuthService) -> APIRouter:
             flow_id=flow_id,
             status=flow["status"],
             error=flow.get("error"),
+            message=flow.get("message"),
             identities=flow.get("identities"),
+            qr_data=flow.get("qr_data"),
         )
         return response
 

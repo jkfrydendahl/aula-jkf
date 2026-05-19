@@ -28,8 +28,9 @@ class AuthStartRequest(BaseModel):
 class AuthStatusResponse(BaseModel):
     flow_id: str
     status: AuthFlowStatus
-    qr_svg: Optional[str] = None
-    identities: Optional[list[dict]] = None
+    message: Optional[str] = None
+    qr_data: Optional[str] = None
+    identities: Optional[list[str]] = None
     error: Optional[str] = None
 
 

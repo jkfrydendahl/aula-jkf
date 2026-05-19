@@ -1,8 +1,11 @@
+import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.settings import Settings
 from app.aula_client import AulaClient
+from app.models.schemas import TokenData
 from app.services.aula_service import AulaService
 from app.services.auth_service import AuthService
 from app.services.push_service import PushService
@@ -69,11 +72,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.push_service = push_service
     app.state.poller = poller
 
+    # Token renewal function for middleware
+    def renew_token(refresh_token: str) -> TokenData:
+        """Renew the access token using the Aula login client."""
+        # The login client's renew uses its internal session and client_id
+        login_client = aula_client._aula_client
+        login_client.tokens = {"refresh_token": refresh_token}
+        success = login_client.renew_access_token()
+        if not success:
+            raise Exception("Token renewal failed")
+        tokens = login_client.tokens
+        expires_at = time.time() + tokens.get("expires_in", 3600)
+        return TokenData(
+            access_token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
+            expires_at=expires_at,
+        )
+
     # Middleware
     app.add_middleware(
         TokenRefreshMiddleware,
         token_repository=token_repo,
-        renew_token_fn=None,  # TODO: wire to aula_client.renew_access_token
+        renew_token_fn=renew_token,
     )
 
     # Routers
