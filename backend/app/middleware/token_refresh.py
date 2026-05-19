@@ -22,25 +22,39 @@ class TokenRefreshMiddleware:
 
     def __init__(
         self,
+        app,
         token_repository: TokenRepository,
         renew_token_fn: Optional[Callable[[str], TokenData]] = None,
     ):
+        self.app = app
         self._token_repository = token_repository
         self._renew_token_fn = renew_token_fn
 
-    async def __call__(self, request: Request, call_next):
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse as StarletteJSONResponse
+
+        request = Request(scope, receive)
+
         # Skip auth-related routes
         if any(request.url.path.startswith(prefix) for prefix in AUTH_ROUTE_PREFIXES):
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
         tokens = self._token_repository.load()
 
         # No tokens at all — require auth
         if tokens is None:
-            return JSONResponse(
+            response = StarletteJSONResponse(
                 status_code=401,
                 content={"detail": "Not authenticated", "re_auth_required": True},
             )
+            await response(scope, receive, send)
+            return
 
         # Check if token needs refresh
         time_until_expiry = tokens.expires_at - time.time()
@@ -48,18 +62,22 @@ class TokenRefreshMiddleware:
         if time_until_expiry < TOKEN_REFRESH_THRESHOLD:
             # Try to refresh
             if self._renew_token_fn is None:
-                return JSONResponse(
+                response = StarletteJSONResponse(
                     status_code=401,
                     content={"detail": "Token expired, no renewal available", "re_auth_required": True},
                 )
+                await response(scope, receive, send)
+                return
             try:
                 new_tokens = self._renew_token_fn(tokens.refresh_token)
                 self._token_repository.save(new_tokens)
             except Exception as e:
                 _LOGGER.warning(f"Token refresh failed: {e}")
-                return JSONResponse(
+                response = StarletteJSONResponse(
                     status_code=401,
                     content={"detail": "Token refresh failed", "re_auth_required": True},
                 )
+                await response(scope, receive, send)
+                return
 
-        return await call_next(request)
+        await self.app(scope, receive, send)

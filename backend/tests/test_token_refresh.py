@@ -2,9 +2,8 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from fastapi.responses import JSONResponse
 
 from app.models.schemas import TokenData
 from app.repositories.token_repository import FileTokenRepository
@@ -15,12 +14,6 @@ def _build_app_with_middleware(token_repo, renew_fn=None):
     """Create a test app with token refresh middleware and a protected endpoint."""
     app = FastAPI()
 
-    middleware = TokenRefreshMiddleware(
-        token_repository=token_repo,
-        renew_token_fn=renew_fn,
-    )
-    app.middleware("http")(middleware)
-
     @app.get("/children")
     async def get_children():
         return {"children": []}
@@ -28,6 +21,12 @@ def _build_app_with_middleware(token_repo, renew_fn=None):
     @app.get("/auth/start")
     async def auth_start():
         return {"flow_id": "test"}
+
+    app.add_middleware(
+        TokenRefreshMiddleware,
+        token_repository=token_repo,
+        renew_token_fn=renew_fn,
+    )
 
     return app
 

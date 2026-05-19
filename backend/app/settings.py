@@ -1,9 +1,16 @@
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 
 class Settings(BaseSettings):
+    # MitID credentials
+    mitid_username: str = ""
+    mitid_password: Optional[str] = None
+    mitid_token: Optional[str] = None
+    auth_method: str = "APP"
+
     # Aula
-    poll_interval_seconds: int = 300
+    poll_interval: int = 300
 
     # VAPID keys for Web Push
     vapid_private_key: str = ""

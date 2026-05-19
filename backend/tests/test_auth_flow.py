@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import create_app
 from app.models.schemas import AuthFlowStatus
 from app.repositories.token_repository import FileTokenRepository
 from app.services.auth_service import AuthService
@@ -14,12 +13,8 @@ from app.routers.auth_router import create_auth_router
 
 def _build_test_app(auth_service):
     """Create a FastAPI test app with auth router wired to the given service."""
-    from app.settings import Settings
-    settings = Settings(
-        token_store_path="dummy",
-        push_store_path="dummy",
-    )
-    app = create_app(settings)
+    from fastapi import FastAPI
+    app = FastAPI()
     router = create_auth_router(auth_service)
     app.include_router(router)
     return app
