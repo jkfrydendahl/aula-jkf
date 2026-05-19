@@ -32,6 +32,7 @@ export interface AuthStatusResponse {
   status: "pending" | "awaiting_identity" | "complete" | "error";
   message?: string;
   qr_data?: string;
+  qr_data_2?: string;
   identities?: string[];
 }
 

@@ -30,6 +30,7 @@ class AuthStatusResponse(BaseModel):
     status: AuthFlowStatus
     message: Optional[str] = None
     qr_data: Optional[str] = None
+    qr_data_2: Optional[str] = None
     identities: Optional[list[str]] = None
     error: Optional[str] = None
 

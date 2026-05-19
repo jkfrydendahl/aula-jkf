@@ -25,14 +25,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Aula PWA Backend", version="0.1.0")
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[settings.frontend_url],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
     app.state.settings = settings
 
     # Repositories
@@ -50,7 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     # Services
-    aula_service = AulaService(aula_client)
+    aula_service = AulaService(aula_client, token_repository=token_repo)
     auth_service = AuthService(token_repository=token_repo)
     push_service = PushService(
         push_repository=push_repo,
@@ -72,7 +64,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Token renewal function for middleware
     def renew_token(refresh_token: str) -> TokenData:
         """Renew the access token using the Aula login client."""
-        # The login client's renew uses its internal session and client_id
         login_client = aula_client._aula_client
         login_client.tokens = {"refresh_token": refresh_token}
         success = login_client.renew_access_token()
@@ -86,11 +77,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             expires_at=expires_at,
         )
 
-    # Middleware
+    # Middleware (order matters: last added = outermost)
+    # TokenRefresh must be INNER (added first), CORS must be OUTER (added last)
     app.add_middleware(
         TokenRefreshMiddleware,
         token_repository=token_repo,
         renew_token_fn=renew_token,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[settings.frontend_url],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # Routers

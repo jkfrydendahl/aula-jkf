@@ -105,6 +105,18 @@ class AulaClient:
         # HTTP session
         self._session = None
         self.unread_messages = unread_messages
+
+        # Data cache (populated by update_data())
+        self._children = []
+        self._childnames = {}
+        self._institutions = {}
+        self._childuserids = []
+        self._childids = []
+        self._daily_overview = {}
+        self._threads = []
+        self._skoleskema = {}
+        self.ugeplaner = {}
+        self.presence = {}
 
     def _persist_tokens(self):
         """Persist tokens via the callback if set."""

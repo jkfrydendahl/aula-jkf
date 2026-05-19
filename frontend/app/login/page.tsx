@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api, AuthStatusResponse } from "@/lib/api";
 
 export default function LoginPage() {
@@ -9,6 +9,7 @@ export default function LoginPage() {
   const [status, setStatus] = useState<AuthStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+  const [qrFrame, setQrFrame] = useState(false);
 
   const startAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,9 +44,16 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!polling) return;
-    const interval = setInterval(pollStatus, 2000);
+    const interval = setInterval(pollStatus, 1000);
     return () => clearInterval(interval);
   }, [polling, pollStatus]);
+
+  // Alternate QR codes every 1 second for TQR animation
+  useEffect(() => {
+    if (!status?.qr_data || !status?.qr_data_2) return;
+    const interval = setInterval(() => setQrFrame((f) => !f), 1000);
+    return () => clearInterval(interval);
+  }, [status?.qr_data, status?.qr_data_2]);
 
   const selectIdentity = async (index: number) => {
     if (!flowId) return;
@@ -81,17 +89,24 @@ export default function LoginPage() {
 
         {flowId && status?.status === "pending" && (
           <div className="text-center space-y-4">
-            <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            </div>
+            {!status.qr_data && (
+              <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-8 h-8 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
+            )}
             <p className="text-gray-600">{status.message || "Godkend i MitID app..."}</p>
             {status.qr_data && (
-              <div className="p-4 bg-gray-100 rounded-lg">
-                <p className="text-sm text-gray-500 mb-2">Scan QR-kode:</p>
-                <code className="text-xs break-all">{status.qr_data}</code>
+              <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                <p className="text-sm text-gray-500 mb-3">Scan med MitID app:</p>
+                <div
+                  className="mx-auto w-[250px] h-[250px] [&>svg]:w-full [&>svg]:h-full"
+                  dangerouslySetInnerHTML={{
+                    __html: (qrFrame && status.qr_data_2) ? status.qr_data_2 : status.qr_data
+                  }}
+                />
               </div>
             )}
           </div>

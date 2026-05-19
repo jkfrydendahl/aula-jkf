@@ -11,17 +11,41 @@ _LOGGER = logging.getLogger(__name__)
 class AulaService:
     """Wraps the Aula client and normalizes data for API consumption."""
 
-    def __init__(self, client: AulaClient):
+    def __init__(self, client: AulaClient, token_repository: Optional[TokenRepository] = None):
         self._client = client
+        self._token_repo = token_repository
+
+    def _ensure_tokens_loaded(self):
+        """Reload tokens from repository into client if not already loaded."""
+        if not self._client._tokens or not self._client._tokens.get("access_token"):
+            if self._token_repo:
+                stored = self._token_repo.load()
+                if stored:
+                    self._client._tokens = {
+                        "access_token": stored.access_token,
+                        "refresh_token": stored.refresh_token,
+                        "expires_at": stored.expires_at,
+                    }
+                    self._client._apply_token_to_session(stored.access_token)
+                    _LOGGER.info("Loaded tokens from repository into client")
 
     @property
     def is_authenticated(self) -> bool:
         """Check if the client has valid tokens."""
+        self._ensure_tokens_loaded()
         return bool(self._client._tokens and self._client._tokens.get("access_token"))
 
     def refresh_data(self) -> None:
         """Call update_data() on the underlying client to refresh all cached data."""
+        self._ensure_tokens_loaded()
         self._client.update_data()
+
+    def ensure_data_loaded(self) -> None:
+        """Ensure the client has data; fetch if empty."""
+        self._ensure_tokens_loaded()
+        if not self._client._children:
+            _LOGGER.info("No cached data, calling update_data()")
+            self._client.update_data()
 
     def get_children(self) -> list[dict[str, Any]]:
         """Return list of child profiles."""

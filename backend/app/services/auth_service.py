@@ -49,8 +49,24 @@ class AuthService:
         return flow_id
 
     def get_status(self, flow_id: str) -> Optional[dict]:
-        """Get the current status of an auth flow."""
-        return self._flows.get(flow_id)
+        """Get the current status of an auth flow, including live QR codes if available."""
+        flow = self._flows.get(flow_id)
+        if flow is None:
+            return None
+
+        # Try to get QR codes from the live login client
+        client = flow.get("_client")
+        if client and flow["status"] == AuthFlowStatus.PENDING:
+            try:
+                qr_svgs = client.get_qr_codes_svg()
+                if qr_svgs:
+                    flow["qr_svg"] = qr_svgs[0]
+                    flow["qr_svg_2"] = qr_svgs[1]
+                    flow["message"] = "Scan QR-koden med MitID app"
+            except Exception:
+                pass  # QR not ready yet
+
+        return flow
 
     def select_identity(self, flow_id: str, identity_index: int) -> bool:
         """Select an identity for a flow waiting on identity selection."""
@@ -80,6 +96,9 @@ class AuthService:
                 mitid_password=password,
                 mitid_token=token,
             )
+
+            # Store client reference so status endpoint can access QR codes
+            flow["_client"] = client
 
             # Set up identity selector callback that blocks until frontend responds
             def identity_selector(identity_names):

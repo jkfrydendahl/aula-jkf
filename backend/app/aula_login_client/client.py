@@ -1395,11 +1395,10 @@ class AulaLoginClient:
         """Convert QR code object to SVG string."""
         matrix = qr_code.get_matrix()
         size = len(matrix)
-        cell_size = 10
 
         svg_parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" '
-            f'width="{size * cell_size}" height="{size * cell_size}" '
+            f'width="100%" height="100%" '
             f'viewBox="0 0 {size} {size}">',
             '<rect width="100%" height="100%" fill="white"/>',
         ]
