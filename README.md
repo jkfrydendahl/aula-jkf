@@ -1,19 +1,19 @@
 # Aula PWA
 
-A standalone Progressive Web App for [Aula](https://aula.dk) (Danish school communication platform). Forked from [scaarup/aula](https://github.com/scaarup/aula) Home Assistant integration — rebuilt as a full-stack web app.
+A standalone Progressive Web App for [Aula](https://aula.dk) (Danish school communication platform). Forked from [scaarup/aula](https://github.com/scaarup/aula) Home Assistant integration, rebuilt as a full-stack web app.
 
 ## Features
 
-- **MitID login** — full OAuth/SAML flow, QR code support
-- **Dashboard** — children's presence status, check-in/out times
-- **Pickup registration** — all 4 Aula activity types (pickup, self-decider, send home, go home with)
-- **Sick registration** — mark/unmark children as sick
-- **Messages** — read threads, view attachments, mark as read
-- **Posts** — institution posts with full content
-- **Vacation registration** — view and respond to vacation surveys
-- **Calendar** — school calendar events
-- **Auto-refresh** — presence every 60s, content every 5min, visibility-aware
-- **Toast notifications** — non-intrusive feedback on actions
+- **MitID login.** Full OAuth/SAML flow, QR code support.
+- **Dashboard.** Children's presence status, check-in/out times.
+- **Pickup registration.** All 4 Aula activity types (pickup, self-decider, send home, go home with).
+- **Sick registration.** Mark/unmark children as sick.
+- **Messages.** Read threads, view attachments, mark as read.
+- **Posts.** Institution posts with full content.
+- **Vacation registration.** View and respond to vacation surveys.
+- **Calendar.** School calendar events.
+- **Auto-refresh.** Presence every 60s, content every 5min, visibility-aware.
+- **Toast notifications.** Non-intrusive feedback on actions.
 
 ## Architecture
 
@@ -30,8 +30,8 @@ backend/           FastAPI Python backend
 
 ## Requirements
 
-- **Must run on a residential IP** — Aula/STIL blocks all datacenter IPs (Railway, AWS, Vercel serverless, etc.)
-- Recommended: Raspberry Pi + Cloudflare Tunnel for remote access
+- **Must run on a residential IP.** Aula/STIL blocks all datacenter IPs (Railway, AWS, Vercel serverless, etc.)
+- Recommended: Raspberry Pi + Cloudflare Tunnel for remote access.
 - Python 3.12+, Node.js 18+
 
 ## Local Development
@@ -39,7 +39,7 @@ backend/           FastAPI Python backend
 ```bash
 # Backend
 cd backend
-python -m venv venv && source venv/bin/activate  # or venv\Scripts\activate on Windows
+python -m venv venv && source venv/bin/activate  # or venv\\Scripts\\activate on Windows
 pip install -r requirements.txt
 cp .env.example .env  # edit with your settings
 uvicorn app.main:app --reload
