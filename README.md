@@ -1,90 +1,73 @@
-[![Current Release](https://img.shields.io/github/release/scaarup/aula/all.svg?style=plastic)](https://github.com/scaarup/aula/releases) [![Github All Releases](https://img.shields.io/github/downloads/scaarup/aula/total.svg?style=plastic)](https://github.com/scaarup/aula/releases) [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=plastic)](https://github.com/hacs/integration)
+# Aula PWA
 
-# Aula
+A standalone Progressive Web App for [Aula](https://aula.dk) (Danish school communication platform). Forked from [scaarup/aula](https://github.com/scaarup/aula) Home Assistant integration — rebuilt as a full-stack web app.
 
-This is a custom component for Home Assistant to integrate Aula.
+## Features
 
-- Installable and updatable via HACS
-- UI config flow
-- School schedules as Home Assistant calendars
-- "Ugeplaner/Ugenoter" from "Min Uddannelse", "Meebook" and "EasyIQ"
-- "Opgaver" from "Min Uddannelse"
-- Messages - if there are unread messages, we turn a binary sensor on and populate it with the message details.
-- "Huskelisten" from "Systematic"
-- Use the builtin service to interact directly with Aulas API.
+- **MitID login** — full OAuth/SAML flow, QR code support
+- **Dashboard** — children's presence status, check-in/out times
+- **Pickup registration** — all 4 Aula activity types (pickup, self-decider, send home, go home with)
+- **Sick registration** — mark/unmark children as sick
+- **Messages** — read threads, view attachments, mark as read
+- **Posts** — institution posts with full content
+- **Vacation registration** — view and respond to vacation surveys
+- **Calendar** — school calendar events
+- **Auto-refresh** — presence every 60s, content every 5min, visibility-aware
+- **Toast notifications** — non-intrusive feedback on actions
 
-  "Ugeplaner/ugenoter/huskelisten" are stored as sensor attributes. Can be rendered like:
+## Architecture
 
-  ```yaml
-  {{ state_attr("sensor.hojelse_skole_emilie", "ugeplan") }}
-  ```
-
-  And visualized in your dashboard with the markdown card:
-
-  ```yaml
-  type: markdown
-  content: '{{ state_attr("sensor.hojelse_skole_emilie", "ugeplan") }}'
-  title: Ugeplan for Emilie
-  ```
-
-  Another example using vertical-stack and collapsable-cards:
-
-  ![image](https://user-images.githubusercontent.com/8055470/200306258-1c9e98ff-75d9-4111-994c-a69833e40c61.png)
-
-```yaml
-type: vertical-stack
-cards:
-  - type: custom:collapsable-cards
-    title: Ugeplan Emilie
-    cards:
-      - type: markdown
-        content: '{{ state_attr("sensor.hojelse_skole_emilie", "ugeplan") }}'
-  - type: custom:collapsable-cards
-    title: Ugeplan Emilie, næste uge
-    cards:
-      - type: markdown
-        content: '{{ state_attr("sensor.hojelse_skole_emilie", "ugeplan_next") }}'
-  - type: custom:collapsable-cards
-    title: Ugeplan Rasmus
-    cards:
-      - type: markdown
-        content: '{{ state_attr("sensor.hojelse_skole_rasmus", "ugeplan") }}'
-  - type: custom:collapsable-cards
-    title: Ugeplan Rasmus, næste uge
-    cards:
-      - type: markdown
-        content: '{{ state_attr("sensor.hojelse_skole_rasmus", "ugeplan_next") }}'
+```
+frontend/          Next.js 14 PWA (Vercel or self-hosted)
+backend/           FastAPI Python backend
+  app/
+    aula_client.py          Aula API client
+    aula_login_client/      MitID OAuth/SAML login flow
+    services/               Business logic layer
+    routers/                REST API endpoints
+    middleware/             Token refresh middleware
 ```
 
-   ![image](https://user-images.githubusercontent.com/8055470/199254249-3bf441bc-7dce-4f5d-a809-d119d20a7b2b.png)
+## Requirements
 
-- Lots of small fixes and optimizations
+- **Must run on a residential IP** — Aula/STIL blocks all datacenter IPs (Railway, AWS, Vercel serverless, etc.)
+- Recommended: Raspberry Pi + Cloudflare Tunnel for remote access
+- Python 3.12+, Node.js 18+
 
-## Installation
+## Local Development
 
-#### HACS
+```bash
+# Backend
+cd backend
+python -m venv venv && source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+cp .env.example .env  # edit with your settings
+uvicorn app.main:app --reload
 
-- Ensure that HACS is installed.
-- Search for and install the "Aula" integration.
-- Restart Home Assistant.
+# Frontend
+cd frontend
+npm install
+cp .env.local.example .env.local
+npm run dev
+```
 
-#### Manual installation
+Visit `http://localhost:3000` and log in with MitID.
 
-- Download the latest release.
-- Unpack the release and copy the custom_components/aula directory into the custom_components directory of your Home Assistant installation.
-- Restart Home Assistant.
+## Deployment (Raspberry Pi + Cloudflare Tunnel)
 
-## Setup
+> **Why not cloud hosting?** Aula/STIL actively blocks datacenter IPs at the network level.
+> Both the API and token refresh endpoints return 403 from any cloud provider.
+> This is the same reason the original integration only works on Home Assistant (which runs locally).
 
-Shortcut:<br>
-[![](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=aula)
+**TODO:** Docker Compose + Cloudflare Tunnel setup instructions.
 
-- Go to Settings -> Integrations -> Add Integration
-- Search for "Aula" and follow the instructions in the config flow.
+## Known Limitations
 
-### Known issues
-- You must use the guardian MitID, childlogin is not supported.
-- The config flow does not currently support a reconfiguration. Meaning when your password expires, the integration must be deleted and added again, in order to update the password.
+- MitID login requires residential IP (home network)
+- Guardian login only (child login not supported)
+- "Registrér ankomst" (check-in) API not yet discovered for parent role
 
-## Support
-Join our Discord https://discord.gg/SnfRg3DWG6 and feel free to ask in #homeassistant
+## Credits
+
+- Original Aula integration: [scaarup/aula](https://github.com/scaarup/aula)
+- MitID login flow reverse-engineered from the original HA component
