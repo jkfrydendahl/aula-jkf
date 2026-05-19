@@ -46,13 +46,16 @@ class AulaService:
     def refresh_data(self) -> None:
         """Call update_data() on the underlying client to refresh all cached data."""
         self._ensure_tokens_loaded()
+        if not hasattr(self._client, 'apiurl') or not self._client.apiurl:
+            self._client.login()
         self._client.update_data()
 
     def ensure_data_loaded(self) -> None:
         """Ensure the client has data; fetch if empty."""
         self._ensure_tokens_loaded()
         if not self._client._children:
-            _LOGGER.info("No cached data, calling update_data()")
+            _LOGGER.info("No cached data, calling login() + update_data()")
+            self._client.login()
             self._client.update_data()
 
     def get_children(self) -> list[dict[str, Any]]:
