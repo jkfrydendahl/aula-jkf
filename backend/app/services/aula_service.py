@@ -1,11 +1,16 @@
 """AulaService: Facade wrapping the Aula client for data access."""
 from typing import Any, Optional
 import logging
+import time
 
 from app.aula_client import AulaClient, AulaClientError, AulaAuthRequiredError
 from app.repositories.token_repository import TokenRepository
 
 _LOGGER = logging.getLogger(__name__)
+
+# Thread cache: {thread_id: (data, timestamp)}
+_thread_cache: dict[int, tuple[dict, float]] = {}
+_THREAD_CACHE_TTL = 300  # 5 minutes
 
 
 class AulaService:
@@ -53,6 +58,7 @@ class AulaService:
         for child in self._client._children:
             children.append({
                 "id": str(child["id"]),
+                "profile_id": str(child.get("profileId", child["id"])),
                 "name": child.get("name", ""),
                 "institution": self._client._institutions.get(child["id"], ""),
             })
@@ -64,30 +70,215 @@ class AulaService:
         if not overview:
             return {"child_id": child_id, "status": "unknown"}
 
+        # Determine actual status from checkInTime/checkOutTime
+        check_in = overview.get("checkInTime")
+        check_out = overview.get("checkOutTime")
+        if check_out:
+            status = "checked_out"
+        elif check_in:
+            status = "checked_in"
+        else:
+            status = "planned"
+
+        # Check for sick/vacation
+        activity_type = overview.get("activityType", 0)
+        if activity_type == 1:
+            status = "sick"
+        elif activity_type == 2:
+            status = "absent"
+
+        location = overview.get("location")
+        location_name = location.get("name", "") if isinstance(location, dict) else None
+
         return {
             "child_id": child_id,
-            "status": overview.get("status", "unknown"),
-            "check_in_time": overview.get("entryTime"),
-            "check_out_time": overview.get("exitTime"),
+            "status": status,
+            "planned_start": overview.get("entryTime"),
+            "planned_end": overview.get("exitTime"),
+            "check_in_time": check_in,
+            "check_out_time": check_out,
             "exit_with": overview.get("exitWith"),
+            "location": location_name,
             "comment": overview.get("comment"),
-            "spare_time_activity": overview.get("spareTimeActivity"),
         }
 
     def get_messages(self) -> list[dict[str, Any]]:
-        """Return messages list (threads from last update_data)."""
+        """Return recent message threads with latest message preview."""
+        self._ensure_tokens_loaded()
+        try:
+            threads = self._client.get_message_threads(page=0)
+        except Exception as e:
+            _LOGGER.warning(f"Failed to fetch message threads: {e}")
+            return []
+
         messages = []
-        if hasattr(self._client, '_threads'):
-            for thread in self._client._threads:
-                messages.append({
-                    "id": str(thread.get("id", "")),
-                    "subject": thread.get("subject", ""),
-                    "sender": thread.get("sender", {}).get("name", ""),
-                    "timestamp": thread.get("lastMessage", {}).get("sendDateTime", ""),
-                    "is_read": not thread.get("isUnread", False),
-                    "text": thread.get("latestMessage", {}).get("text", {}).get("html", ""),
-                })
+        for thread in threads[:20]:
+            latest = thread.get("latestMessage", {})
+            # Sender from thread creator
+            creator = thread.get("creator", {})
+            sender = creator.get("fullName", "Ukendt")
+            # Child filter: use regardingChildren profileIds
+            regarding = thread.get("regardingChildren", [])
+            child_profile_ids = [str(rc.get("profileId", "")) for rc in regarding]
+            recipients = thread.get("recipients", [])
+            messages.append({
+                "id": str(thread.get("id", "")),
+                "subject": thread.get("subject", "(ingen emne)"),
+                "sender": sender,
+                "timestamp": latest.get("sendDateTime", ""),
+                "is_read": thread.get("read", True),
+                "preview": latest.get("text", {}).get("html", "")[:150] if isinstance(latest.get("text"), dict) else str(latest.get("text", ""))[:150],
+                "child_profile_ids": child_profile_ids,
+                "recipients": [r.get("fullName", "") for r in recipients[:5]],
+            })
         return messages
+
+    def get_posts(self) -> list[dict[str, Any]]:
+        """Return recent posts/opslag."""
+        try:
+            result = self._client.get_posts(index=0, limit=20)
+            raw_posts = result.get("posts", [])
+            last_seen = result.get("profileLastSeenPostDate", "")
+        except Exception as e:
+            _LOGGER.warning(f"Failed to fetch posts: {e}")
+            return []
+
+        posts = []
+        for post in raw_posts:
+            content = post.get("content", {})
+            html = content.get("html", "") if isinstance(content, dict) else str(content)
+
+            owner = post.get("ownerProfile", {})
+            sender = owner.get("fullName", "Ukendt") if isinstance(owner, dict) else "Ukendt"
+            institution = ""
+            if isinstance(owner, dict) and isinstance(owner.get("institution"), dict):
+                institution = owner["institution"].get("institutionName", "")
+
+            attachments = []
+            for att in post.get("attachments", []):
+                file_info = att.get("file") or {}
+                attachments.append({
+                    "id": att.get("id"),
+                    "name": att.get("name") or file_info.get("name", "unknown"),
+                    "url": file_info.get("url", ""),
+                })
+
+            post_timestamp = post.get("publishAt") or post.get("timestamp", "")
+            is_read = bool(last_seen and post_timestamp and post_timestamp <= last_seen)
+
+            # Child association from relatedProfiles
+            related = post.get("relatedProfiles", [])
+            child_profile_ids = [
+                str(rp.get("profileId")) for rp in related
+                if isinstance(rp, dict) and rp.get("role") == "child"
+            ]
+
+            posts.append({
+                "id": str(post.get("id", "")),
+                "title": post.get("title", "(intet emne)"),
+                "content": html,
+                "sender": sender,
+                "institution": institution,
+                "timestamp": post_timestamp,
+                "is_important": post.get("isImportant", False),
+                "is_read": is_read,
+                "allow_comments": post.get("allowComments", False),
+                "comment_count": post.get("commentCount", 0),
+                "attachments": attachments,
+                "child_profile_ids": child_profile_ids,
+            })
+        return posts
+
+    def get_vacation_registrations(self) -> list[dict[str, Any]]:
+        """Return pending vacation registrations for all children."""
+        try:
+            raw_data = self._client.get_vacation_registrations()
+        except Exception as e:
+            _LOGGER.warning(f"Failed to fetch vacation registrations: {e}")
+            return []
+
+        registrations = []
+        for child_entry in raw_data:
+            child = child_entry.get("child", {})
+            child_name = child.get("name", "Ukendt")
+            child_id = str(child.get("id", ""))
+            child_profile_id = str(child.get("profileId", ""))
+
+            for reg in child_entry.get("vacationRegistrations", []):
+                registrations.append({
+                    "id": reg.get("vacationRegistrationId"),
+                    "response_id": reg.get("responseId"),
+                    "title": reg.get("title", ""),
+                    "note": reg.get("noteToGuardian", ""),
+                    "start_date": reg.get("startDate", ""),
+                    "end_date": reg.get("endDate", ""),
+                    "deadline": reg.get("responseDeadline", ""),
+                    "is_editable": reg.get("isEditable", False),
+                    "is_missing_answer": reg.get("isMissingAnswer", False),
+                    "child_name": child_name,
+                    "child_id": child_id,
+                    "child_profile_id": child_profile_id,
+                })
+        return registrations
+
+    def submit_vacation_response(self, response_id: int, child_id: int, days: list[dict], comment: str | None = None) -> dict[str, Any]:
+        """Submit a vacation registration response."""
+        result = self._client.submit_vacation_response(response_id, child_id, days, comment)
+        status = result.get("status", {})
+        if status.get("code") == 0:
+            return {"success": True}
+        return {"success": False, "error": status.get("message", "Unknown error")}
+
+    def get_thread_detail(self, thread_id: int) -> dict[str, Any]:
+        """Return full messages for a specific thread (cached for 5 min)."""
+        # Check cache first
+        cached = _thread_cache.get(thread_id)
+        if cached and (time.time() - cached[1]) < _THREAD_CACHE_TTL:
+            return cached[0]
+
+        self._ensure_tokens_loaded()
+        try:
+            data = self._client.get_thread_messages(thread_id)
+        except Exception as e:
+            _LOGGER.warning(f"Failed to fetch thread {thread_id}: {e}")
+            return {"messages": []}
+
+        messages = []
+        for msg in data.get("messages", []):
+            if msg.get("messageType") == "Message":
+                text = ""
+                if isinstance(msg.get("text"), dict):
+                    text = msg["text"].get("html", "")
+                elif msg.get("text"):
+                    text = str(msg["text"])
+
+                attachments = []
+                for att in msg.get("attachments", []):
+                    file_info = att.get("file", {})
+                    attachments.append({
+                        "id": att.get("id"),
+                        "name": att.get("name", file_info.get("name", "unknown")),
+                        "url": file_info.get("url", ""),
+                    })
+
+                messages.append({
+                    "id": str(msg.get("id", "")),
+                    "sender": msg.get("sender", {}).get("fullName", "Ukendt"),
+                    "timestamp": msg.get("sendDateTime", ""),
+                    "text": text,
+                    "attachments": attachments,
+                })
+        result = {
+            "subject": data.get("subject", ""),
+            "messages": messages,
+        }
+        _thread_cache[thread_id] = (result, time.time())
+        return result
+
+    def mark_thread_read(self, thread_id: int) -> bool:
+        """Mark a thread as read."""
+        self._ensure_tokens_loaded()
+        return self._client.mark_thread_read(thread_id)
 
     def get_calendar(self, child_id: str) -> list[dict[str, Any]]:
         """Return calendar events for a child."""
@@ -132,6 +323,100 @@ class AulaService:
             },
         )
         return {"success": True, "data": result}
+
+    def get_pickup_responsibles(self, child_id: str) -> list[dict[str, Any]]:
+        """Return pickup responsibles for a child."""
+        self._ensure_tokens_loaded()
+        raw = self._client.get_pickup_responsibles(int(child_id))
+        # raw is list of {uniStudentId, relatedPersons: [...]}
+        responsibles = []
+        for entry in raw:
+            for person in entry.get("relatedPersons", []):
+                responsibles.append({
+                    "id": str(person.get("institutionProfileId", "")),
+                    "name": person.get("name", ""),
+                    "relation": person.get("relation", ""),
+                })
+        return responsibles
+
+    def get_go_home_with_list(self, child_id: str) -> list[dict[str, Any]]:
+        """Return list of children that this child can go home with."""
+        self._ensure_tokens_loaded()
+        raw = self._client.get_go_home_with_list(int(child_id))
+        children = []
+        for entry in raw:
+            children.append({
+                "id": str(entry.get("institutionProfileId", "")),
+                "name": entry.get("fullName", ""),
+                "group": entry.get("mainGroup", ""),
+            })
+        return children
+
+    def update_presence_template(
+        self,
+        child_id: str,
+        date: str,
+        activity_type: int,
+        entry_time: str,
+        exit_time: str,
+        exit_with: str | None = None,
+        comment: str | None = None,
+    ) -> dict[str, Any]:
+        """Update presence template (pickup/departure info)."""
+        self._ensure_tokens_loaded()
+
+        # Build presenceActivity based on activityType
+        if activity_type == 0:
+            # Hentes af (pickup)
+            presence_activity = {
+                "activityType": 0,
+                "pickup": {
+                    "entryTime": entry_time,
+                    "exitTime": exit_time,
+                    "exitWith": exit_with or "",
+                },
+            }
+        elif activity_type == 1:
+            # Selvbestemmer (self-decider)
+            presence_activity = {
+                "activityType": 1,
+                "selfDecider": {
+                    "entryTime": entry_time,
+                    "exitStartTime": "",
+                    "exitEndTime": "",
+                },
+            }
+        elif activity_type == 2:
+            # Send hjem
+            presence_activity = {
+                "activityType": 2,
+                "sendHome": {
+                    "entryTime": entry_time,
+                    "exitTime": exit_time,
+                },
+            }
+        elif activity_type == 3:
+            # Gå hjem med
+            presence_activity = {
+                "activityType": 3,
+                "goHomeWith": {
+                    "entryTime": entry_time,
+                    "exitTime": exit_time,
+                    "exitWith": exit_with or "",
+                },
+            }
+        else:
+            return {"success": False, "error": f"Unknown activityType: {activity_type}"}
+
+        result = self._client.update_presence_template(
+            institution_profile_id=int(child_id),
+            date=date,
+            presence_activity=presence_activity,
+            comment=comment,
+        )
+
+        success = result.get("status", {}).get("message") == "OK"
+        return {"success": success, "data": result}
 
     def get_unread_count(self) -> int:
         """Return number of unread messages."""

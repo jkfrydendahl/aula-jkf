@@ -127,6 +127,167 @@ class AulaClient:
             except Exception as e:
                 _LOGGER.warning(f"Failed to persist tokens: {e}")
 
+    def get_message_threads(self, page: int = 0) -> list[dict]:
+        """Fetch message threads (newest first)."""
+        self._ensure_valid_token()
+        res = self._session.get(
+            self.apiurl
+            + "?method=messaging.getThreads&sortOn=date&orderDirection=desc&page="
+            + str(page)
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        data = res.json()
+        threads = data.get("data", {}).get("threads", [])
+        return threads
+
+    def get_posts(self, index: int = 0, limit: int = 10) -> dict:
+        """Fetch posts/opslag from overview. Returns {posts, profileLastSeenPostDate}."""
+        # Collect all institution profile IDs (parent + children)
+        all_profile_ids = []
+        for p in self._profiles:
+            for ip in p.get("institutionProfiles", []):
+                all_profile_ids.append(str(ip.get("id")))
+        for c in self._children:
+            all_profile_ids.append(str(c["id"]))
+
+        ids_params = "&".join([f"institutionProfileIds[]={pid}" for pid in all_profile_ids])
+        res = self._session.get(
+            self.apiurl
+            + f"?method=posts.getAllPosts&parent=profile&index={index}&{ids_params}&limit={limit}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        data = res.json().get("data", {})
+        if not isinstance(data, dict):
+            return {"posts": [], "profileLastSeenPostDate": None}
+        return {
+            "posts": data.get("posts", []),
+            "profileLastSeenPostDate": data.get("profileLastSeenPostDate"),
+        }
+
+    def get_vacation_registrations(self) -> list[dict]:
+        """Fetch pending vacation registrations for all children."""
+        child_ids_params = "&".join([f"childIds[]={c['id']}" for c in self._children])
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getVacationRegistrationsByChildren&{child_ids_params}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", [])
+
+    def get_vacation_registration_response(self, response_id: int) -> dict:
+        """Fetch details for a specific vacation registration response."""
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getVacationRegistrationResponse&vacationRegistrationResponseId={response_id}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", {})
+
+    def submit_vacation_response(self, response_id: int, child_id: int, days: list[dict], comment: str | None = None) -> dict:
+        """Submit a vacation registration response."""
+        csrf_token = self._get_csrf_token()
+        headers = {"content-type": "application/json"}
+        if csrf_token:
+            headers["csrfp-token"] = csrf_token
+        payload = {
+            "vacationRegistrationResponseId": response_id,
+            "childId": child_id,
+            "days": days,
+            "comment": comment,
+        }
+        res = self._session.post(
+            self.apiurl
+            + "?method=calendar.respondToVacationRegistrationRequest"
+            + self._get_access_token_param(),
+            json=payload,
+            headers=headers,
+            verify=True,
+        )
+        return res.json()
+
+    def get_pickup_responsibles(self, institution_profile_id: int) -> list[dict]:
+        """Fetch pickup responsibles (parents/relations) for a child."""
+        self._ensure_valid_token()
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getPickupResponsibles&uniStudentIds[]={institution_profile_id}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", [])
+
+    def get_go_home_with_list(self, institution_profile_id: int) -> list[dict]:
+        """Fetch list of children that a child can go home with."""
+        self._ensure_valid_token()
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getGoHomeWithList&institutionProfileId={institution_profile_id}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", [])
+
+    def update_presence_template(self, institution_profile_id: int, date: str, presence_activity: dict, comment: str | None = None) -> dict:
+        """Update presence template (pickup type, times, etc.)."""
+        csrf_token = self._get_csrf_token()
+        headers = {"content-type": "application/json"}
+        if csrf_token:
+            headers["csrfp-token"] = csrf_token
+        payload = {
+            "institutionProfileId": institution_profile_id,
+            "byDate": date,
+            "presenceActivity": presence_activity,
+            "comment": comment,
+            "repeatPattern": "never",
+            "expiresAt": None,
+        }
+        res = self._session.post(
+            self.apiurl
+            + "?method=presence.updatePresenceTemplate"
+            + self._get_access_token_param(),
+            json=payload,
+            headers=headers,
+            verify=True,
+        )
+        return res.json()
+
+    def get_thread_messages(self, thread_id: int, page: int = 0) -> dict:
+        """Fetch messages for a specific thread."""
+        res = self._session.get(
+            self.apiurl
+            + "?method=messaging.getMessagesForThread&threadId="
+            + str(thread_id)
+            + "&page="
+            + str(page)
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", {})
+
+    def mark_thread_read(self, thread_id: int) -> bool:
+        """Mark a thread as read."""
+        csrf_token = self._get_csrf_token()
+        headers = {"content-type": "application/json"}
+        if csrf_token:
+            headers["csrfp-token"] = csrf_token
+        res = self._session.post(
+            self.apiurl
+            + "?method=messaging.markThreadAsRead"
+            + self._get_access_token_param(),
+            json={"threadIds": [thread_id]},
+            headers=headers,
+            verify=True,
+        )
+        _LOGGER.debug(f"markThreadAsRead response: {res.status_code} {res.text[:200]}")
+        if res.status_code == 200:
+            data = res.json()
+            return data.get("status", {}).get("message") == "OK"
+        return False
+
     def _get_access_token_param(self):
         if self._tokens and "access_token" in self._tokens:
             return "&access_token=" + self._tokens["access_token"]
