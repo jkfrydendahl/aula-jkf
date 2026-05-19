@@ -18,3 +18,4 @@ config/home-assistant_v2.db-wal
 skoleskema.json
 backend/.env
 frontend/.env.local
+backend/data/
