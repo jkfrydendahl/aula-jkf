@@ -231,6 +231,18 @@ class AulaClient:
         )
         return res.json().get("data", [])
 
+    def get_presence_states(self) -> list[dict]:
+        """Fetch current presence states for all children."""
+        self._ensure_valid_token()
+        ids_params = "&".join([f"institutionProfileIds[]={c['id']}" for c in self._children])
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getPresenceStates&{ids_params}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", [])
+
     def update_presence_template(self, institution_profile_id: int, date: str, presence_activity: dict, comment: str | None = None) -> dict:
         """Update presence template (pickup type, times, etc.)."""
         csrf_token = self._get_csrf_token()

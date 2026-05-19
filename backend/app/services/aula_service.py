@@ -70,29 +70,53 @@ class AulaService:
         if not overview:
             return {"child_id": child_id, "status": "unknown"}
 
-        # Determine actual status from checkInTime/checkOutTime
-        check_in = overview.get("checkInTime")
-        check_out = overview.get("checkOutTime")
-        if check_out:
-            status = "checked_out"
-        elif check_in:
-            status = "checked_in"
-        else:
-            status = "planned"
+        # Get the real presence state from Aula
+        presence_states = self._client.get_presence_states()
+        aula_state = None
+        for entry in presence_states:
+            if str(entry.get("uniStudentId")) == str(child_id):
+                aula_state = entry.get("state")
+                break
 
-        # Check for sick/vacation
+        # Map Aula state codes to our status strings
+        # Known states: 0=ikke til stede, 1=til stede(?), 8=gået hjem
+        state_map = {
+            0: "not_present",
+            1: "checked_in",
+            2: "checked_in",  # might be "on trip" etc
+            3: "checked_in",
+            8: "checked_out",
+        }
+
+        if aula_state is not None:
+            status = state_map.get(aula_state, "not_present")
+        else:
+            # Fallback to checkInTime/checkOutTime
+            check_in = overview.get("checkInTime")
+            check_out = overview.get("checkOutTime")
+            if check_out:
+                status = "checked_out"
+            elif check_in:
+                status = "checked_in"
+            else:
+                status = "not_present"
+
+        # Check for sick/vacation from daily overview
         activity_type = overview.get("activityType", 0)
         if activity_type == 1:
             status = "sick"
         elif activity_type == 2:
             status = "absent"
 
+        check_in = overview.get("checkInTime")
+        check_out = overview.get("checkOutTime")
         location = overview.get("location")
         location_name = location.get("name", "") if isinstance(location, dict) else None
 
         return {
             "child_id": child_id,
             "status": status,
+            "state_code": aula_state,
             "planned_start": overview.get("entryTime"),
             "planned_end": overview.get("exitTime"),
             "check_in_time": check_in,
@@ -313,16 +337,39 @@ class AulaService:
         return {"success": True, "data": result}
 
     def update_presence(self, child_id: str, status: str) -> dict[str, Any]:
-        """Update child presence status."""
-        # Map status to exitWith/entryTime based on Aula's API
+        """Update child presence status (check-in via updateDailyOverview)."""
+        import json
         result = self._client.custom_api_call(
             uri="presence.updateDailyOverview",
-            post_data={
+            post_data=json.dumps({
                 "childId": int(child_id),
                 "status": status,
-            },
+            }),
         )
         return {"success": True, "data": result}
+
+    def update_sick_status(self, child_id: str, is_sick: bool) -> dict[str, Any]:
+        """Mark child as sick or not sick."""
+        self._ensure_tokens_loaded()
+        csrf_token = self._client._get_csrf_token()
+        headers = {"content-type": "application/json"}
+        if csrf_token:
+            headers["csrfp-token"] = csrf_token
+        payload = {
+            "institutionProfileIds": [int(child_id)],
+            "status": 1 if is_sick else 0,
+        }
+        res = self._client._session.post(
+            self._client.apiurl
+            + "?method=presence.updateStatusByInstitutionProfileIds"
+            + self._client._get_access_token_param(),
+            json=payload,
+            headers=headers,
+            verify=True,
+        )
+        data = res.json()
+        success = data.get("status", {}).get("message") == "OK"
+        return {"success": success, "data": data}
 
     def get_pickup_responsibles(self, child_id: str) -> list[dict[str, Any]]:
         """Return pickup responsibles for a child."""

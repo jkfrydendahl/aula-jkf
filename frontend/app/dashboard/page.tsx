@@ -1,7 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api, Child, Presence, PickupResponsible, GoHomeWithChild, Message, ThreadDetail, Post, VacationRegistration } from "@/lib/api";
+
+// Toast notification type
+interface Toast {
+  id: number;
+  message: string;
+  type: "success" | "error";
+}
 
 export default function DashboardPage() {
   const [children, setChildren] = useState<Child[]>([]);
@@ -29,9 +36,36 @@ export default function DashboardPage() {
   const [pickupExitWith, setPickupExitWith] = useState("");
   const [pickupSubmitting, setPickupSubmitting] = useState(false);
 
+  // Toast notifications
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdRef = useRef(0);
+
+  function showToast(message: string, type: "success" | "error" = "success") {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  }
+
   useEffect(() => {
     loadData();
   }, []);
+
+  // Auto-refresh presence every 60 seconds
+  useEffect(() => {
+    if (children.length === 0) return;
+    const interval = setInterval(async () => {
+      try {
+        const presenceMap: Record<string, Presence> = {};
+        for (const child of children) {
+          presenceMap[child.id] = await api.getPresence(child.id);
+        }
+        setPresence(presenceMap);
+      } catch { /* silent refresh failure */ }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [children]);
 
   async function loadData() {
     try {
@@ -157,8 +191,30 @@ export default function DashboardPage() {
     }));
     try {
       await api.updatePresence(childId, status);
+      showToast("Status opdateret");
     } catch {
+      showToast("Kunne ikke opdatere status", "error");
       // Revert on failure — reload presence
+      try {
+        const p = await api.getPresence(childId);
+        setPresence((prev) => ({ ...prev, [childId]: p }));
+      } catch { /* ignore */ }
+    }
+  }
+
+  async function markSick(childId: string, isSick: boolean) {
+    setPresence((prev) => ({
+      ...prev,
+      [childId]: { ...prev[childId], status: isSick ? "sick" : "planned" },
+    }));
+    try {
+      await api.updateSickStatus(childId, isSick);
+      showToast(isSick ? "Meldt syg" : "Sygemelding fjernet");
+      // Refresh presence to get accurate state
+      const p = await api.getPresence(childId);
+      setPresence((prev) => ({ ...prev, [childId]: p }));
+    } catch {
+      showToast("Kunne ikke opdatere sygestatus", "error");
       try {
         const p = await api.getPresence(childId);
         setPresence((prev) => ({ ...prev, [childId]: p }));
@@ -205,8 +261,9 @@ export default function DashboardPage() {
       const p = await api.getPresence(pickupFormChild);
       setPresence((prev) => ({ ...prev, [pickupFormChild!]: p }));
       setPickupFormChild(null);
+      showToast("Hentetype opdateret");
     } catch (e) {
-      alert("Fejl ved opdatering af hentetype");
+      showToast("Fejl ved opdatering af hentetype", "error");
     } finally {
       setPickupSubmitting(false);
     }
@@ -270,7 +327,7 @@ export default function DashboardPage() {
                     <div className="mt-3">
                       <div className="space-y-0">
                         <p className="text-sm text-gray-600">
-                          Status: {p.status === "checked_in" ? "Til stede" : p.status === "checked_out" ? "Gået hjem" : p.status === "sick" ? "Syg" : p.status === "absent" ? "Fraværende" : "Forventet"}
+                          Status: {p.status === "checked_in" ? "Til stede" : p.status === "checked_out" ? "Gået hjem" : p.status === "sick" ? "Syg" : p.status === "absent" ? "Fraværende" : "Ikke til stede"}
                           {p.location && ` (${p.location})`}
                         </p>
                         {p.check_in_time && (
@@ -289,7 +346,7 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2 mt-3">
-                        {(p.status === "planned") && (
+                        {(p.status === "not_present" || p.status === "planned") && (
                           <button
                             onClick={() => updatePresence(child.id, "checked_in")}
                             className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 hover:bg-green-200"
@@ -303,12 +360,20 @@ export default function DashboardPage() {
                         >
                           Ændr hentetype
                         </button>
-                        {(p.status === "planned" || p.status === "checked_in") && (
+                        {p.status !== "sick" && (
                           <button
-                            onClick={() => updatePresence(child.id, "sick")}
+                            onClick={() => markSick(child.id, true)}
                             className="text-xs px-3 py-1 rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200"
                           >
                             Meld syg
+                          </button>
+                        )}
+                        {p.status === "sick" && (
+                          <button
+                            onClick={() => markSick(child.id, false)}
+                            className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 hover:bg-green-200"
+                          >
+                            Fjern sygemelding
                           </button>
                         )}
                       </div>
@@ -832,6 +897,23 @@ export default function DashboardPage() {
           )}
         </section>
       </main>
+      {/* Toast notifications */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 space-y-2">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-fade-in ${
+                toast.type === "error"
+                  ? "bg-red-600 text-white"
+                  : "bg-green-600 text-white"
+              }`}
+            >
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

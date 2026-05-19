@@ -161,6 +161,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ child_id: childId, status }),
     }),
+  updateSickStatus: (childId: string, isSick: boolean) =>
+    request<{ success: boolean }>("/presence/sick", {
+      method: "POST",
+      body: JSON.stringify({ child_id: childId, is_sick: isSick }),
+    }),
   getPickupResponsibles: (childId: string) =>
     request<PickupResponsible[]>(`/presence/${childId}/pickup-responsibles`),
   getGoHomeWithList: (childId: string) =>

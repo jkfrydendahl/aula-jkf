@@ -16,6 +16,11 @@ class UpdatePresenceRequest(BaseModel):
     status: str
 
 
+class UpdateSickRequest(BaseModel):
+    child_id: str
+    is_sick: bool
+
+
 class UpdatePresenceTemplateRequest(BaseModel):
     child_id: str
     date: str
@@ -42,6 +47,13 @@ def create_action_router(aula_service: AulaService) -> APIRouter:
         return aula_service.update_presence(
             child_id=request.child_id,
             status=request.status,
+        )
+
+    @router.post("/presence/sick")
+    def update_sick_status(request: UpdateSickRequest):
+        return aula_service.update_sick_status(
+            child_id=request.child_id,
+            is_sick=request.is_sick,
         )
 
     @router.get("/presence/{child_id}/pickup-responsibles")
