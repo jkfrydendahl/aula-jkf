@@ -42,12 +42,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Load stored tokens
     stored_tokens = token_repo.load()
 
-    # Aula client with token persistence callback
+    # Aula client for data fetching (uses stored tokens only, no credentials)
     aula_client = AulaClient(
-        mitid_username=settings.mitid_username,
-        auth_method=settings.auth_method,
-        mitid_password=settings.mitid_password,
-        mitid_token=settings.mitid_token,
+        mitid_username="",  # Not needed for data fetching, only for re-auth
         stored_tokens=stored_tokens.model_dump() if stored_tokens else None,
         on_tokens_updated=lambda tokens: token_repo.save(tokens),
     )
