@@ -21,11 +21,14 @@ class AulaService:
         self._token_repo = token_repository
 
     def _ensure_tokens_loaded(self):
-        """Reload tokens from repository into client if not already loaded."""
-        if not self._client._tokens or not self._client._tokens.get("access_token"):
-            if self._token_repo:
-                stored = self._token_repo.load()
-                if stored:
+        """Reload tokens from repository into client if missing or stale."""
+        if self._token_repo:
+            stored = self._token_repo.load()
+            if stored:
+                # Reload if client has no tokens or if stored tokens are newer
+                current = self._client._tokens
+                if (not current or not current.get("access_token") or
+                        current.get("access_token") != stored.access_token):
                     self._client._tokens = {
                         "access_token": stored.access_token,
                         "refresh_token": stored.refresh_token,

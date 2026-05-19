@@ -1,6 +1,8 @@
 import time
+import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.settings import Settings
@@ -17,6 +19,8 @@ from app.routers.auth_router import create_auth_router
 from app.routers.data_router import create_data_router
 from app.routers.action_router import create_action_router
 from app.routers.push_router import create_push_router
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -97,6 +101,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Global exception handler — ensures CORS headers are present on errors
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        _LOGGER.error(f"Unhandled error on {request.method} {request.url.path}: {exc}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(exc)},
+        )
 
     # Routers
     app.include_router(create_auth_router(auth_service, admin_secret=settings.admin_secret))
