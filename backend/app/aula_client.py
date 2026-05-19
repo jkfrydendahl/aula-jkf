@@ -1,0 +1,1292 @@
+import logging
+import requests
+import datetime
+import pytz
+import threading
+from bs4 import BeautifulSoup
+import json, re
+
+_LOGGER = logging.getLogger(__name__)
+
+# Constants (previously in const.py)
+API = "https://www.aula.dk/api/v"
+API_VERSION = "22"
+MIN_UDDANNELSE_API = "https://api.minuddannelse.net/aula"
+MEEBOOK_API = "https://app.meebook.com/aulaapi"
+SYSTEMATIC_API = "https://systematic-momo.dk/api/aula"
+EASYIQ_API = "https://api.easyiqcloud.dk/api/aula"
+
+
+class AulaClientError(Exception):
+    """Raised when the Aula client encounters an error."""
+    pass
+
+
+class AulaAuthRequiredError(AulaClientError):
+    """Raised when re-authentication is needed."""
+    pass
+
+
+class AulaClient:
+    huskeliste = {}
+    presence = {}
+    ugep_attr = {}
+    ugepnext_attr = {}
+    mu_opgaver_attr = {}
+    mu_opgaver_next_attr = {}
+    widgets = {}
+    tokens = {}
+
+    def __init__(
+        self,
+        mitid_username,
+        auth_method="APP",
+        mitid_password=None,
+        mitid_token=None,
+        schoolschedule=True,
+        ugeplan=True,
+        mu_opgaver=True,
+        stored_tokens=None,
+        unread_messages=0,
+        mitid_identity=1,
+        login_client=None,
+        on_tokens_updated=None,
+    ):
+        self._mitid_username = mitid_username
+        self._auth_method = auth_method
+        self._mitid_password = mitid_password
+        self._mitid_token = mitid_token
+        self._mitid_identity = mitid_identity
+
+        # Callback for persisting tokens (replaces HA config entry)
+        self._on_tokens_updated = on_tokens_updated
+
+        # Initialize AulaLoginClient (injected or created)
+        if login_client is not None:
+            self._aula_client = login_client
+        else:
+            from app.aula_login_client.client import AulaLoginClient
+            self._aula_client = AulaLoginClient(
+                mitid_username=mitid_username,
+                mitid_password=mitid_password,
+                mitid_token=mitid_token,
+                auth_method=auth_method,
+                verbose=False,
+                debug=False,
+            )
+
+        # Set up identity selector callback
+        def identity_selector(identity_names):
+            """Select identity based on configured preference."""
+            if self._mitid_identity <= len(identity_names):
+                _LOGGER.info(
+                    f"Auto-selecting identity {self._mitid_identity}: {identity_names[self._mitid_identity-1]}"
+                )
+                return str(self._mitid_identity)
+            else:
+                _LOGGER.warning(
+                    f"Configured identity {self._mitid_identity} not available, using first identity"
+                )
+                return "1"
+
+        self._aula_client.identity_selector = identity_selector
+
+        # Feature flags
+        self._schoolschedule = schoolschedule
+        self._ugeplan = ugeplan
+        self._mu_opgaver = mu_opgaver
+
+        # Token storage
+        self._tokens = stored_tokens or {}
+
+        # Token refresh lock to prevent concurrent refresh attempts
+        self._token_refresh_lock = threading.Lock()
+
+        # HTTP session
+        self._session = None
+        self.unread_messages = unread_messages
+
+        # Data cache (populated by update_data())
+        self._children = []
+        self._childnames = {}
+        self._institutions = {}
+        self._childuserids = []
+        self._childids = []
+        self._daily_overview = {}
+        self._threads = []
+        self._skoleskema = {}
+        self.ugeplaner = {}
+        self.presence = {}
+
+    def _persist_tokens(self):
+        """Persist tokens via the callback if set."""
+        if self._on_tokens_updated and self._tokens:
+            try:
+                self._on_tokens_updated(self._tokens)
+                _LOGGER.debug("Tokens persisted via callback")
+            except Exception as e:
+                _LOGGER.warning(f"Failed to persist tokens: {e}")
+
+    def get_message_threads(self, page: int = 0) -> list[dict]:
+        """Fetch message threads (newest first)."""
+        self._ensure_valid_token()
+        res = self._session.get(
+            self.apiurl
+            + "?method=messaging.getThreads&sortOn=date&orderDirection=desc&page="
+            + str(page)
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        data = res.json()
+        threads = data.get("data", {}).get("threads", [])
+        return threads
+
+    def get_posts(self, index: int = 0, limit: int = 10) -> dict:
+        """Fetch posts/opslag from overview. Returns {posts, profileLastSeenPostDate}."""
+        # Collect all institution profile IDs (parent + children)
+        all_profile_ids = []
+        for p in self._profiles:
+            for ip in p.get("institutionProfiles", []):
+                all_profile_ids.append(str(ip.get("id")))
+        for c in self._children:
+            all_profile_ids.append(str(c["id"]))
+
+        ids_params = "&".join([f"institutionProfileIds[]={pid}" for pid in all_profile_ids])
+        res = self._session.get(
+            self.apiurl
+            + f"?method=posts.getAllPosts&parent=profile&index={index}&{ids_params}&limit={limit}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        data = res.json().get("data", {})
+        if not isinstance(data, dict):
+            return {"posts": [], "profileLastSeenPostDate": None}
+        return {
+            "posts": data.get("posts", []),
+            "profileLastSeenPostDate": data.get("profileLastSeenPostDate"),
+        }
+
+    def get_vacation_registrations(self) -> list[dict]:
+        """Fetch pending vacation registrations for all children."""
+        child_ids_params = "&".join([f"childIds[]={c['id']}" for c in self._children])
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getVacationRegistrationsByChildren&{child_ids_params}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", [])
+
+    def get_vacation_registration_response(self, response_id: int) -> dict:
+        """Fetch details for a specific vacation registration response."""
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getVacationRegistrationResponse&vacationRegistrationResponseId={response_id}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", {})
+
+    def submit_vacation_response(self, response_id: int, child_id: int, days: list[dict], comment: str | None = None) -> dict:
+        """Submit a vacation registration response."""
+        csrf_token = self._get_csrf_token()
+        headers = {"content-type": "application/json"}
+        if csrf_token:
+            headers["csrfp-token"] = csrf_token
+        payload = {
+            "vacationRegistrationResponseId": response_id,
+            "childId": child_id,
+            "days": days,
+            "comment": comment,
+        }
+        res = self._session.post(
+            self.apiurl
+            + "?method=calendar.respondToVacationRegistrationRequest"
+            + self._get_access_token_param(),
+            json=payload,
+            headers=headers,
+            verify=True,
+        )
+        return res.json()
+
+    def get_pickup_responsibles(self, institution_profile_id: int) -> list[dict]:
+        """Fetch pickup responsibles (parents/relations) for a child."""
+        self._ensure_valid_token()
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getPickupResponsibles&uniStudentIds[]={institution_profile_id}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", [])
+
+    def get_go_home_with_list(self, institution_profile_id: int) -> list[dict]:
+        """Fetch list of children that a child can go home with."""
+        self._ensure_valid_token()
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getGoHomeWithList&institutionProfileId={institution_profile_id}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", [])
+
+    def get_presence_states(self) -> list[dict]:
+        """Fetch current presence states for all children."""
+        self._ensure_valid_token()
+        ids_params = "&".join([f"institutionProfileIds[]={c['id']}" for c in self._children])
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getPresenceStates&{ids_params}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", [])
+
+    def get_daily_overview(self, child_id: int) -> dict | None:
+        """Fetch fresh daily overview for a single child."""
+        self._ensure_valid_token()
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getDailyOverview&childIds[]={child_id}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        data = res.json().get("data", [])
+        if data and len(data) > 0:
+            return data[0]
+        return None
+
+    def update_presence_template(self, institution_profile_id: int, date: str, presence_activity: dict, comment: str | None = None) -> dict:
+        """Update presence template (pickup type, times, etc.)."""
+        csrf_token = self._get_csrf_token()
+        headers = {"content-type": "application/json"}
+        if csrf_token:
+            headers["csrfp-token"] = csrf_token
+        payload = {
+            "institutionProfileId": institution_profile_id,
+            "byDate": date,
+            "presenceActivity": presence_activity,
+            "comment": comment,
+            "repeatPattern": "never",
+            "expiresAt": None,
+        }
+        res = self._session.post(
+            self.apiurl
+            + "?method=presence.updatePresenceTemplate"
+            + self._get_access_token_param(),
+            json=payload,
+            headers=headers,
+            verify=True,
+        )
+        return res.json()
+
+    def get_thread_messages(self, thread_id: int, page: int = 0) -> dict:
+        """Fetch messages for a specific thread."""
+        res = self._session.get(
+            self.apiurl
+            + "?method=messaging.getMessagesForThread&threadId="
+            + str(thread_id)
+            + "&page="
+            + str(page)
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        return res.json().get("data", {})
+
+    def mark_thread_read(self, thread_id: int) -> bool:
+        """Mark a thread as read."""
+        csrf_token = self._get_csrf_token()
+        headers = {"content-type": "application/json"}
+        if csrf_token:
+            headers["csrfp-token"] = csrf_token
+        res = self._session.post(
+            self.apiurl
+            + "?method=messaging.markThreadAsRead"
+            + self._get_access_token_param(),
+            json={"threadIds": [thread_id]},
+            headers=headers,
+            verify=True,
+        )
+        _LOGGER.debug(f"markThreadAsRead response: {res.status_code} {res.text[:200]}")
+        if res.status_code == 200:
+            data = res.json()
+            return data.get("status", {}).get("message") == "OK"
+        return False
+
+    def _get_access_token_param(self):
+        if self._tokens and "access_token" in self._tokens:
+            return "&access_token=" + self._tokens["access_token"]
+        return ""
+
+    def _get_csrf_token(self):
+        """Get CSRF token from session cookies, or None if not available."""
+        cookies = self._session.cookies.get_dict()
+        return cookies.get("Csrfp-Token")
+
+    def custom_api_call(self, uri, post_data):
+        csrf_token = self._get_csrf_token()
+        headers = {"content-type": "application/json"}
+        if csrf_token:
+            headers["csrfp-token"] = csrf_token
+        _LOGGER.debug("custom_api_call: Making API call to " + self.apiurl + uri)
+        if post_data == 0:
+            response = self._session.get(
+                self.apiurl + uri + self._get_access_token_param(),
+                headers=headers,
+                verify=True,
+            )
+        else:
+            try:
+                # Check if post_data is valid JSON
+                json.loads(post_data)
+            except json.JSONDecodeError as e:
+                _LOGGER.error("Invalid json supplied as post_data")
+                error_msg = {"result": "Fail - invalid json supplied as post_data"}
+                return error_msg
+            _LOGGER.debug("custom_api_call: post_data:" + post_data)
+            response = self._session.post(
+                self.apiurl + uri + self._get_access_token_param(),
+                headers=headers,
+                json=json.loads(post_data),
+                verify=True,
+            )
+        _LOGGER.debug(response.text)
+        try:
+            res = response.json()
+        except:
+            res = {"raw_response": response.text}
+        return res
+
+    def login(self):
+        """Authenticate with Aula using MitID OAuth 2.0 flow."""
+        _LOGGER.info("Starting MitID authentication")
+
+        try:
+            # Check if we have valid stored tokens
+            if self._tokens:
+                self._aula_client.tokens = self._tokens
+                token_check = self._aula_client.check_token_expiration()
+
+                # Log token status
+                expires_in = token_check.get("expires_in", 0)
+                if expires_in > 0:
+                    hours = int(expires_in // 3600)
+                    minutes = int((expires_in % 3600) // 60)
+                    _LOGGER.info(f"Token expires in {hours}h {minutes}m ({int(expires_in)}s)")
+                else:
+                    _LOGGER.info(f"Token status: {token_check.get('reason', 'unknown')}")
+
+                # If token looks valid, try to use it
+                if token_check.get("valid", False):
+                    _LOGGER.info("Using valid stored tokens")
+                    self._apply_token_to_session(self._tokens["access_token"])
+                    try:
+                        return self._verify_api_access()
+                    except (AulaClientError, Exception) as e:
+                        _LOGGER.warning(
+                            f"Stored token rejected by API: {e}. Attempting refresh."
+                        )
+
+                # If we are here, token is expired or rejected. Try refresh.
+                _LOGGER.info("Attempting to refresh token")
+                if self._aula_client.renew_access_token():
+                    # Update local tokens
+                    self._tokens = self._aula_client.tokens
+                    self._apply_token_to_session(self._tokens["access_token"])
+                    _LOGGER.info("Token refreshed successfully")
+
+                    # Persist refreshed tokens via callback
+                    self._persist_tokens()
+
+                    return self._verify_api_access()
+                else:
+                    _LOGGER.warning("Token refresh failed.")
+                    raise AulaAuthRequiredError("Token expired and refresh failed")
+
+            # Need fresh authentication
+            _LOGGER.info("Performing fresh MitID authentication")
+            auth_result = self._aula_client.authenticate()
+
+            if not auth_result.get("success", False):
+                error_msg = auth_result.get("error", "Unknown authentication error")
+                _LOGGER.error(f"MitID authentication failed: {error_msg}")
+                raise AulaClientError(f"MitID authentication failed: {error_msg}")
+
+            # Store new tokens
+            self._tokens = auth_result["tokens"]
+            self._apply_token_to_session(self._tokens["access_token"])
+
+            # Verify API access
+            return self._verify_api_access()
+
+        except AulaAuthRequiredError:
+            raise
+        except Exception as e:
+            _LOGGER.error(f"Login failed: {str(e)}")
+            raise AulaClientError(f"Login failed: {str(e)}")
+
+    def _apply_token_to_session(self, access_token):
+        """Initialize session for API calls. Token is passed as query parameter, not header."""
+        if not self._session:
+            self._session = requests.Session()
+
+        # Don't set Authorization header - Aula API expects token as query parameter
+        # Setting both causes 400 Bad Request errors
+        self._session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0",
+            }
+        )
+
+    def _verify_api_access(self):
+        """Verify API access with current token."""
+        # Find the API url in case of a version change
+        self.apiurl = API + API_VERSION
+        apiver = int(API_VERSION)
+        api_success = False
+        max_version_attempts = 20  # Prevent infinite loop
+
+        while not api_success and apiver < int(API_VERSION) + max_version_attempts:
+            _LOGGER.debug("Trying API at " + self.apiurl)
+            try:
+                ver = self._session.get(
+                    self.apiurl
+                    + "?method=profiles.getProfilesByLogin"
+                    + self._get_access_token_param(),
+                    verify=True,
+                )
+
+                if ver.status_code == 410:
+                    _LOGGER.debug(
+                        "API was expected at "
+                        + self.apiurl
+                        + " but responded with HTTP 410. The integration will automatically try a newer version and everything may work fine."
+                    )
+                    apiver += 1
+                    self.apiurl = API + str(apiver)
+                elif ver.status_code == 403:
+                    msg = "Access to Aula API was denied. Token may be invalid or expired."
+                    _LOGGER.error(msg)
+                    raise AulaClientError(msg)
+                elif ver.status_code == 400:
+                    # Bad request - log details and raise error (don't increment version)
+                    _LOGGER.error(f"API returned 400 Bad Request. Response: {ver.text[:500]}")
+                    raise AulaClientError("API returned 400 Bad Request - check token format")
+                elif ver.status_code == 200:
+                    ver_json = ver.json()
+                    ver_data = ver_json.get("data") if ver_json else None
+                    if not ver_data or "profiles" not in ver_data:
+                        raise AulaClientError("API returned 200 but no profile data")
+                    self._profiles = ver_data["profiles"]
+                    api_success = True
+                else:
+                    _LOGGER.error(f"Unexpected API response: {ver.status_code}")
+                    raise AulaClientError(f"Unexpected API response: {ver.status_code}")
+            except Exception as e:
+                _LOGGER.error(f"API verification error: {str(e)}")
+                raise
+
+        _LOGGER.debug("Found API on " + self.apiurl)
+
+        # Get profile context
+        profile_context_response = self._session.get(
+            self.apiurl
+            + "?method=profiles.getProfileContext&portalrole=guardian"
+            + self._get_access_token_param(),
+            verify=True,
+        ).json()
+        profile_context_data = profile_context_response.get("data") if profile_context_response else None
+        if not profile_context_data:
+            raise AulaClientError("Could not get profile context - API returned no data")
+        self._profilecontext = profile_context_data.get("institutionProfile", {}).get("relations", [])
+
+        _LOGGER.info("MitID authentication successful")
+        _LOGGER.debug(
+            "Config - schoolschedule: "
+            + str(self._schoolschedule)
+            + ", config - ugeplaner: "
+            + str(self._ugeplan)
+            + ", config - MU opgaver: "
+            + str(self._mu_opgaver)
+        )
+        return True
+
+    def get_widgets(self):
+        widgets_response = self._session.get(
+            self.apiurl
+            + "?method=profiles.getProfileContext"
+            + self._get_access_token_param(),
+            verify=True,
+        ).json()
+        widgets_data = widgets_response.get("data") if widgets_response else None
+        if not widgets_data:
+            _LOGGER.warning("Could not get widgets - API returned no data")
+            return
+        detected_widgets = widgets_data.get("pageConfiguration", {}).get("widgetConfigurations", [])
+        for widget in detected_widgets:
+            widgetid = str(widget["widget"]["widgetId"])
+            widgetname = widget["widget"]["name"]
+            self.widgets[widgetid] = widgetname
+        _LOGGER.info("Widgets found: " + str(self.widgets))
+
+    def get_token(self, widgetid, mock=False):
+        if widgetid in self.tokens:
+            token, timestamp = self.tokens[widgetid]
+            current_time = datetime.datetime.now(pytz.utc)
+            if current_time - timestamp < datetime.timedelta(minutes=1):
+                _LOGGER.debug("Reusing existing token for widget " + widgetid)
+                return token
+        if mock:
+            return "MockToken"
+
+        _LOGGER.debug("Requesting new token for widget " + widgetid)
+        token_response = self._session.get(
+            self.apiurl
+            + "?method=aulaToken.getAulaToken&widgetId="
+            + widgetid
+            + self._get_access_token_param(),
+            verify=True,
+        ).json()
+        self._bearertoken = token_response.get("data") if token_response else None
+        if not self._bearertoken:
+            _LOGGER.warning(f"Could not get token for widget {widgetid}")
+            return None
+
+        token = "Bearer " + str(self._bearertoken)
+        self.tokens[widgetid] = (token, datetime.datetime.now(pytz.utc))
+        return token
+
+    def _ensure_valid_token(self):
+        """Ensure we have a valid access token, refresh if needed.
+
+        This method handles token refresh with proper error handling to prevent
+        coordinator update failures. Token refresh is non-blocking and uses
+        runtime storage to avoid triggering config entry reload cycles.
+
+        Returns:
+            bool: True if token is valid or refresh succeeded, False on critical failure
+        """
+        # Check if we have tokens at all
+        if not self._tokens:
+            _LOGGER.warning("No tokens available, performing full login")
+            try:
+                self.login()
+                return True
+            except Exception as e:
+                _LOGGER.error(f"Login failed during token validation: {e}")
+                # Don't raise - let coordinator handle the failure gracefully
+                return False
+
+        # Check token expiration
+        try:
+            self._aula_client.tokens = self._tokens
+            token_check = self._aula_client.check_token_expiration()
+        except Exception as e:
+            _LOGGER.warning(f"Error checking token expiration: {e}, assuming token is valid")
+            # If we can't check expiration, assume token is valid and continue
+            # The API call will fail if token is actually invalid, and we'll handle it then
+            return True
+
+        # If token is valid, no refresh needed
+        if token_check.get("valid", False):
+            return True
+
+        # Token needs refresh - use lock to prevent concurrent refresh attempts
+        reason = token_check.get("reason", "expired")
+        _LOGGER.info(f"Token needs refresh: {reason}")
+
+        # Try to acquire lock, but don't block if another refresh is in progress
+        if not self._token_refresh_lock.acquire(blocking=False):
+            _LOGGER.debug("Token refresh already in progress, skipping concurrent attempt")
+            # If refresh is in progress, assume it will succeed and continue
+            # The next update cycle will verify if refresh succeeded
+            return True
+
+        try:
+            # Perform token refresh
+            try:
+                if self._aula_client.renew_access_token():
+                    refresh_result = {
+                        "success": True,
+                        "tokens": self._aula_client.tokens,
+                    }
+                    self._tokens = refresh_result["tokens"]
+                    self._apply_token_to_session(self._tokens["access_token"])
+                    _LOGGER.info("Token refreshed successfully")
+
+                    # Persist refreshed tokens via callback
+                    self._persist_tokens()
+
+                    return True
+                else:
+                    _LOGGER.warning("Token refresh failed, attempting re-authentication...")
+                    try:
+                        self.login()
+                        return True
+                    except Exception as e:
+                        _LOGGER.error(f"Re-authentication failed: {e}")
+                        # Don't raise - let coordinator handle gracefully
+                        return False
+            except Exception as e:
+                _LOGGER.error(f"Token refresh error: {e}, attempting re-authentication...")
+                try:
+                    self.login()
+                    return True
+                except Exception as e2:
+                    _LOGGER.error(f"Re-authentication failed after refresh error: {e2}")
+                    # Don't raise - let coordinator handle gracefully
+                    return False
+        finally:
+            # Always release the lock
+            self._token_refresh_lock.release()
+
+    ###
+
+    def update_data(self):
+        # Ensure valid token before making API calls
+        self._ensure_valid_token()
+
+        is_logged_in = False
+        if self._session:
+            response = self._session.get(
+                self.apiurl
+                + "?method=profiles.getProfilesByLogin"
+                + self._get_access_token_param(),
+                verify=True,
+            ).json()
+            is_logged_in = response["status"]["message"] == "OK"
+
+        _LOGGER.debug("is_logged_in? " + str(is_logged_in))
+
+        if not is_logged_in:
+            self.login()
+
+        self._childnames = {}
+        self._institutions = {}
+        self._childuserids = []
+        self._childids = []
+        self._children = []
+        self._institutionProfiles = []
+        self._childrenFirstNamesAndUserIDs = {}
+        for profile in self._profiles:
+            for child in profile["children"]:
+                self._childnames[child["id"]] = child["name"]
+                self._institutions[child["id"]] = child["institutionProfile"][
+                    "institutionName"
+                ]
+                self._children.append(child)
+                self._childids.append(str(child["id"]))
+                self._childuserids.append(str(child["userId"]))
+                self._childrenFirstNamesAndUserIDs[child["userId"]] = child[
+                    "name"
+                ].split()[0]
+            for institutioncode in profile["institutionProfiles"]:
+                if (
+                    str(institutioncode["institutionCode"])
+                    not in self._institutionProfiles
+                ):
+                    self._institutionProfiles.append(
+                        str(institutioncode["institutionCode"])
+                    )
+        _LOGGER.debug("Child ids and names: " + str(self._childnames))
+        _LOGGER.debug("Child ids and institution names: " + str(self._institutions))
+        _LOGGER.debug("Institution codes: " + str(self._institutionProfiles))
+
+        self._daily_overview = {}
+        for i, child in enumerate(self._children):
+            response = self._session.get(
+                self.apiurl
+                + "?method=presence.getDailyOverview&childIds[]="
+                + str(child["id"])
+                + self._get_access_token_param(),
+                verify=True,
+            ).json()
+            response_data = response.get("data") if response else None
+            if response_data and len(response_data) > 0:
+                self.presence[str(child["id"])] = 1
+                self._daily_overview[str(child["id"])] = response_data[0]
+            else:
+                _LOGGER.debug(
+                    "Unable to retrieve presence data from Aula from child with id "
+                    + str(child["id"])
+                    + ". Some data will be missing from sensor entities."
+                )
+                self.presence[str(child["id"])] = 0
+        _LOGGER.debug("Child ids and presence data status: " + str(self.presence))
+
+        # Messages:
+        mesres = self._session.get(
+            self.apiurl
+            + "?method=messaging.getThreads&sortOn=date&orderDirection=desc&page=0"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        # _LOGGER.debug("mesres "+str(mesres.text))
+        self.unread_messages = 0
+        unread = 0
+        self.message = {}
+        mesres_json = mesres.json()
+        threads = mesres_json.get("data", {}).get("threads") if mesres_json else None
+        for mes in threads or []:
+            if not mes["read"]:
+                # self.unread_messages = 1
+#                print("unread mes "+str(mes))
+                unread = 1
+                threadid = mes["id"]
+                break
+        # if self.unread_messages == 1:
+        if unread == 1:
+            # _LOGGER.debug("tid "+str(threadid))
+            threadres = self._session.get(
+                self.apiurl
+                + "?method=messaging.getMessagesForThread&threadId="
+                + str(threadid)
+                + "&page=0"
+                + self._get_access_token_param(),
+                verify=True,
+            )
+            # _LOGGER.debug("threadres "+str(threadres.text))
+            threadres_json = threadres.json()
+            if threadres_json.get("status", {}).get("code") == 403:
+                self.message["text"] = (
+                    "Log ind på Aula med MitID for at læse denne besked."
+                )
+                self.message["sender"] = "Ukendt afsender"
+                self.message["subject"] = "Følsom besked"
+                self.unread_messages = 1
+            elif threadres_json.get("data") and threadres_json["data"].get("messages"):
+                for message in threadres_json["data"]["messages"]:
+                    if message["messageType"] == "Message":
+                        try:
+                            self.message["text"] = message["text"]["html"]
+                        except:
+                            try:
+                                self.message["text"] = message["text"]
+                            except:
+                                self.message["text"] = "intet indhold..."
+                                _LOGGER.warning(
+                                    "There is an unread message, but we cannot get the text."
+                                )
+                        try:
+                            self.message["sender"] = message["sender"]["fullName"]
+                        except:
+                            self.message["sender"] = "Ukendt afsender"
+                        try:
+                            self.message["subject"] = threadres_json["data"].get(
+                                "subject", ""
+                            )
+                        except:
+                            self.message["subject"] = ""
+                        self.unread_messages = 1
+                        break
+
+        # Calendar:
+        if self._schoolschedule is True:
+            instProfileIds = ",".join(self._childids)
+            csrf_token = self._get_csrf_token()
+            headers = {"content-type": "application/json"}
+            if csrf_token:
+                headers["csrfp-token"] = csrf_token
+            start = datetime.datetime.now(datetime.timezone.utc).strftime(
+                "%Y-%m-%d 00:00:00.0000%z"
+            )
+            _end = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+                days=14
+            )
+            end = _end.strftime("%Y-%m-%d 00:00:00.0000%z")
+            post_data = (
+                '{"instProfileIds":['
+                + instProfileIds
+                + '],"resourceIds":[],"start":"'
+                + start
+                + '","end":"'
+                + end
+                + '"}'
+            )
+            _LOGGER.debug("Fetching calendars...")
+            # _LOGGER.debug("Calendar post-data: "+str(post_data))
+            res = self._session.post(
+                self.apiurl
+                + "?method=calendar.getEventsByProfileIdsAndResourceIds"
+                + self._get_access_token_param(),
+                data=post_data,
+                headers=headers,
+                verify=True,
+            )
+            try:
+                with open("skoleskema.json", "w") as skoleskema_json:
+                    json.dump(res.text, skoleskema_json)
+            except:
+                _LOGGER.warning(
+                    "Got the following reply when trying to fetch calendars: "
+                    + str(res.text)
+                )
+        # End of calendar
+        # MU Opgaver:
+        if self._mu_opgaver is True:
+            try:
+                guardian = self._session.get(
+                    self.apiurl
+                    + "?method=profiles.getProfileContext&portalrole=guardian"
+                    + self._get_access_token_param(),
+                    verify=True,
+                ).json()["data"]["userId"]
+            except Exception as e:
+                _LOGGER.warning(
+                    f"Error retrieving MU Opgaver: Empty or ambiguous response: {e}"
+                )
+                return
+            childUserIds = ",".join(self._childuserids)
+
+            if len(self.widgets) == 0:
+                self.get_widgets()
+            if "0030" not in self.widgets:
+                _LOGGER.error(
+                    "You have enabled Min Uddannelse Opgaver, but we cannot find any supported widgets (0030) in Aula."
+                )
+
+            def mu_opgaver(week, thisnext):
+                if "0030" in self.widgets:
+                    _LOGGER.debug("In the MU Opgaver flow")
+                    token = self.get_token("0030")
+                    get_payload = (
+                        "/opgaveliste?assuranceLevel=2&childFilter="
+                        + childUserIds
+                        + "&currentWeekNumber="
+                        + week
+                        + "&isMobileApp=false&placement=narrow&sessionUUID="
+                        + guardian
+                        + "&userProfile=guardian"
+                    )
+                    mu_opgaver = requests.get(
+                        MIN_UDDANNELSE_API + get_payload,
+                        headers={"Authorization": token, "accept": "application/json"},
+                        verify=True,
+                    )
+                    _LOGGER.debug(
+                        "MU Opgaver status_code " + str(mu_opgaver.status_code)
+                    )
+                    _LOGGER.debug("MU Opgaver response " + str(mu_opgaver.text))
+                    mu_opgaver_json = mu_opgaver.json()
+                    opgaver_list = mu_opgaver_json.get("opgaver", []) if mu_opgaver_json else []
+                    for full_name in self._childnames.items():
+                        name_parts = full_name[1].split()
+                        first_name = name_parts[0]
+                        _ugep = ""
+                        for i in opgaver_list:
+                            _LOGGER.debug(
+                                "i kuvertnavn split " + str(i["kuvertnavn"].split()[0])
+                            )
+                            _LOGGER.debug("first_name " + first_name)
+                            if i["kuvertnavn"].split()[0] == first_name:
+                                _ugep = _ugep + "<h2>" + i["title"] + "</h2>"
+                                _ugep = _ugep + "<h3>" + i["kuvertnavn"] + "</h3>"
+                                _ugep = _ugep + "Ugedag: " + i["ugedag"] + "<br>"
+                                _ugep = _ugep + "Type: " + i["opgaveType"] + "<br>"
+                                for h in i["hold"]:
+                                    _ugep = _ugep + "Hold: " + h["navn"] + "<br>"
+                                try:
+                                    _ugep = _ugep + "Forløb: " + i["forloeb"]["navn"]
+                                except:
+                                    _LOGGER.debug("Did not find forloeb key: " + str(i))
+                        if thisnext == "this":
+                            self.mu_opgaver_attr[first_name] = _ugep
+                        elif thisnext == "next":
+                            self.mu_opgaver_next_attr[first_name] = _ugep
+                        _LOGGER.debug("MU Opgaver result: " + str(_ugep))
+
+            now = datetime.datetime.now() + datetime.timedelta(weeks=1)
+            thisweek = datetime.datetime.now().strftime("%Y-W%V")
+            nextweek = now.strftime("%Y-W%V")
+            mu_opgaver(thisweek, "this")
+            mu_opgaver(nextweek, "next")
+        # End of MU Opgaver
+
+        # Ugeplaner:
+        if self._ugeplan is True:
+            guardian_response = self._session.get(
+                self.apiurl
+                + "?method=profiles.getProfileContext&portalrole=guardian"
+                + self._get_access_token_param(),
+                verify=True,
+            ).json()
+            guardian_data = guardian_response.get("data") if guardian_response else None
+            if not guardian_data or "userId" not in guardian_data:
+                _LOGGER.warning("Could not get guardian userId for ugeplaner")
+                return True
+            guardian = guardian_data["userId"]
+            childUserIds = ",".join(self._childuserids)
+
+            if len(self.widgets) == 0:
+                self.get_widgets()
+            if (
+                "0029" not in self.widgets
+                and "0004" not in self.widgets
+                and "0062" not in self.widgets
+                and "0001" not in self.widgets
+            ):
+                _LOGGER.error(
+                    "You have enabled ugeplaner, but we cannot find any supported widgets (0029,0004,0001) in Aula."
+                )
+            if "0029" in self.widgets and "0004" in self.widgets:
+                _LOGGER.warning(
+                    "Multiple sources for ugeplaner is untested and might cause problems."
+                )
+
+            def ugeplan(week, thisnext):
+                if "0029" in self.widgets:
+                    token = self.get_token("0029")
+                    get_payload = (
+                        "/ugebrev?assuranceLevel=2&childFilter="
+                        + childUserIds
+                        + "&currentWeekNumber="
+                        + week
+                        + "&isMobileApp=false&placement=narrow&sessionUUID="
+                        + guardian
+                        + "&userProfile=guardian"
+                    )
+                    ugeplaner = requests.get(
+                        MIN_UDDANNELSE_API + get_payload,
+                        headers={"Authorization": token, "accept": "application/json"},
+                        verify=True,
+                    )
+                    # _LOGGER.debug("ugeplaner status_code "+str(ugeplaner.status_code))
+                    # _LOGGER.debug("ugeplaner response "+str(ugeplaner.text))
+                    try:
+                        for person in ugeplaner.json()["personer"]:
+                            ugeplan = person["institutioner"][0]["ugebreve"][0][
+                                "indhold"
+                            ]
+                            if thisnext == "this":
+                                self.ugep_attr[person["navn"].split()[0]] = ugeplan
+                            elif thisnext == "next":
+                                self.ugepnext_attr[person["navn"].split()[0]] = ugeplan
+                    except:
+                        _LOGGER.debug("Cannot fetch ugeplaner, so setting as empty")
+                        _LOGGER.debug("ugeplaner response " + str(ugeplaner.text))
+                if "0001" in self.widgets:
+                    import calendar
+
+                    _LOGGER.debug("In the EasyIQ flow")
+                    token = self.get_token("0001")
+                    csrf_token = self._get_csrf_token()
+
+                    easyiq_headers = {
+                        "x-aula-institutionfilter": str(self._institutionProfiles[0]),
+                        "x-aula-userprofile": "guardian",
+                        "Authorization": token,
+                        "accept": "application/json",
+                        "origin": "https://www.aula.dk",
+                        "referer": "https://www.aula.dk/",
+                        "authority": "api.easyiqcloud.dk",
+                    }
+                    if csrf_token:
+                        easyiq_headers["csrfp-token"] = csrf_token
+
+                    for child in self._childrenFirstNamesAndUserIDs.items():
+                        userid = child[0]
+                        first_name = child[1]
+
+                        _LOGGER.debug("EasyIQ headers " + str(easyiq_headers))
+                        post_data = {
+                            "sessionId": guardian,
+                            "currentWeekNr": week,
+                            "userProfile": "guardian",
+                            "institutionFilter": self._institutionProfiles,
+                            "childFilter": [userid],
+                        }
+                        _LOGGER.debug("EasyIQ post data " + str(post_data))
+                        ugeplaner = requests.post(
+                            EASYIQ_API + "/weekplaninfo",
+                            json=post_data,
+                            headers=easyiq_headers,
+                            verify=True,
+                        )
+                        # _LOGGER.debug(
+                        #    "EasyIQ Opgaver status_code " + str(ugeplaner.status_code)
+                        # )
+                        _LOGGER.debug(
+                            "EasyIQ Opgaver response " + str(ugeplaner.json())
+                        )
+                        _ugep = (
+                            "<h2>"
+                            # + ugeplaner.json()["Weekplan"]["ActivityName"]
+                            + " Uge "
+                            + week.split("-W")[1]
+                            # + ugeplaner.json()["Weekplan"]["WeekNo"]
+                            + "</h2>"
+                        )
+                        # from datetime import datetime
+
+                        def findDay(date):
+                            day, month, year = (int(i) for i in date.split(" "))
+                            dayNumber = calendar.weekday(year, month, day)
+                            days = [
+                                "Mandag",
+                                "Tirsdag",
+                                "Onsdag",
+                                "Torsdag",
+                                "Fredag",
+                                "Lørdag",
+                                "Søndag",
+                            ]
+                            return days[dayNumber]
+
+                        def is_correct_format(date_string, format):
+                            try:
+                                datetime.datetime.strptime(date_string, format)
+                                return True
+                            except ValueError:
+                                _LOGGER.debug(
+                                    "Could not parse timestamp: " + str(date_string)
+                                )
+                                return False
+
+                        try:
+                            for i in ugeplaner.json()["Events"]:
+                                if is_correct_format(i["start"], "%Y/%m/%d %H:%M"):
+                                    _LOGGER.debug("No Event")
+                                    start_datetime = datetime.datetime.strptime(
+                                        i["start"], "%Y/%m/%d %H:%M"
+                                    )
+                                    _LOGGER.debug(start_datetime)
+                                    end_datetime = datetime.datetime.strptime(
+                                        i["end"], "%Y/%m/%d %H:%M"
+                                    )
+                                    if start_datetime.date() == end_datetime.date():
+                                        formatted_day = findDay(
+                                            start_datetime.strftime("%d %m %Y")
+                                        )
+                                        formatted_start = start_datetime.strftime(
+                                            " %H:%M"
+                                        )
+                                        formatted_end = end_datetime.strftime("- %H:%M")
+                                        dresult = f"{formatted_day} {formatted_start} {formatted_end}"
+                                    else:
+                                        formatted_start = findDay(
+                                            start_datetime.strftime("%d %m %Y")
+                                        )
+                                        formatted_end = findDay(
+                                            end_datetime.strftime("%d %m %Y")
+                                        )
+                                        dresult = f"{formatted_start} {formatted_end}"
+                                    _ugep = _ugep + "<br><b>" + dresult + "</b><br>"
+                                    if i["itemType"] == "5":
+                                        _ugep = (
+                                            _ugep
+                                            + "<br><b>"
+                                            + str(i["title"])
+                                            + "</b><br>"
+                                        )
+                                    else:
+                                        _ugep = (
+                                            _ugep
+                                            + "<br><b>"
+                                            + str(i["ownername"])
+                                            + "</b><br>"
+                                        )
+                                    _ugep = _ugep + str(i["description"]) + "<br>"
+                                else:
+                                    _LOGGER.debug("None")
+                        except KeyError:
+                            _LOGGER.debug("None")
+
+                        if thisnext == "this":
+                            self.ugep_attr[first_name] = _ugep
+                        elif thisnext == "next":
+                            self.ugepnext_attr[first_name] = _ugep
+                        _LOGGER.debug("EasyIQ result: " + str(_ugep))
+
+                if "0062" in self.widgets:
+                    _LOGGER.debug("In the Huskelisten flow...")
+                    token = self.get_token("0062", False)
+                    huskelisten_headers = {
+                        "Accept": "application/json, text/plain, */*",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Accept-Language": "en-US,en;q=0.9,da;q=0.8",
+                        "Aula-Authorization": token,
+                        "Origin": "https://www.aula.dk",
+                        "Referer": "https://www.aula.dk/",
+                        "Sec-Fetch-Dest": "empty",
+                        "Sec-Fetch-Mode": "cors",
+                        "Sec-Fetch-Site": "cross-site",
+                        "User-Agent": "Mozilla/5.0 (X11; CrOS x86_64 15183.51.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+                        "zone": "Europe/Copenhagen",
+                    }
+
+                    children = "&children=".join(self._childuserids)
+                    institutions = "&institutions=".join(self._institutionProfiles)
+                    timedelta = datetime.datetime.now() + datetime.timedelta(days=7)
+                    From = datetime.datetime.now().strftime("%Y-%m-%d")
+                    dueNoLaterThan = timedelta.strftime("%Y-%m-%d")
+                    get_payload = (
+                        "/reminders/v1?children="
+                        + children
+                        + "&from="
+                        + From
+                        + "&dueNoLaterThan="
+                        + dueNoLaterThan
+                        + "&widgetVersion=1.10&userProfile=guardian&sessionId="
+                        + self._mitid_username
+                        + "&institutions="
+                        + institutions
+                    )
+                    _LOGGER.debug(
+                        "Huskelisten get_payload: " + SYSTEMATIC_API + get_payload
+                    )
+                    #
+                    mock_huskelisten = 0
+                    #
+                    if mock_huskelisten == 1:
+                        _LOGGER.warning("Using mock data for Huskelisten.")
+                        mock_huskelisten = '[{"userName":"Emilie efternavn","userId":164625,"courseReminders":[],"assignmentReminders":[],"teamReminders":[{"id":76169,"institutionName":"Holme Skole","institutionId":183,"dueDate":"2022-11-29T23:00:00Z","teamId":65240,"teamName":"2A","reminderText":"Onsdagslektie: Matematikfessor.dk: Sænk skibet med plus.","createdBy":"Peter ","lastEditBy":"Peter ","subjectName":"Matematik"},{"id":76598,"institutionName":"Holme Skole","institutionId":183,"dueDate":"2022-12-06T23:00:00Z","teamId":65240,"teamName":"2A","reminderText":"Julekalender på Skoledu.dk: I skal forsøge at løse dagens kalenderopgave. opgaven kan også godt løses dagen efter.","createdBy":"Peter ","lastEditBy":"Peter Riis","subjectName":"Matematik"},{"id":76599,"institutionName":"Holme Skole","institutionId":183,"dueDate":"2022-12-13T23:00:00Z","teamId":65240,"teamName":"2A","reminderText":"Julekalender på Skoledu.dk: I skal forsøge at løse dagens kalenderopgave. opgaven kan også godt løses dagen efter.","createdBy":"Peter ","lastEditBy":"Peter ","subjectName":"Matematik"},{"id":76600,"institutionName":"Holme Skole","institutionId":183,"dueDate":"2022-12-20T23:00:00Z","teamId":65240,"teamName":"2A","reminderText":"Julekalender på Skoledu.dk: I skal forsøge at løse dagens kalenderopgave. opgaven kan også godt løses dagen efter.","createdBy":"Peter Riis","lastEditBy":"Peter Riis","subjectName":"Matematik"}]},{"userName":"Karla","userId":77882,"courseReminders":[],"assignmentReminders":[{"id":0,"institutionName":"Holme Skole","institutionId":183,"dueDate":"2022-12-08T11:00:00Z","courseId":297469,"teamNames":["5A","5B"],"teamIds":[65271,65258],"courseSubjects":[],"assignmentId":5027904,"assignmentText":"Skriv en novelle"}],"teamReminders":[{"id":76367,"institutionName":"Holme Skole","institutionId":183,"dueDate":"2022-11-30T23:00:00Z","teamId":65258,"teamName":"5A","reminderText":"Læse resten af kap.1 fra Ternet Ninja ( kopiark) Læs det hele højt eller vælg et afsnit. ","createdBy":"Christina ","lastEditBy":"Christina ","subjectName":"Dansk"}]},{"userName":"Vega  ","userId":206597,"courseReminders":[],"assignmentReminders":[],"teamReminders":[]}]'
+                        data = json.loads(mock_huskelisten, strict=False)
+                    else:
+                        response = requests.get(
+                            SYSTEMATIC_API + get_payload,
+                            headers=huskelisten_headers,
+                            verify=True,
+                        )
+                        try:
+                            data = json.loads(response.text, strict=False)
+                        except:
+                            _LOGGER.error(
+                                "Could not parse the response from Huskelisten as json."
+                            )
+                        # _LOGGER.debug("Huskelisten raw response: "+str(response.text))
+
+                    for person in data:
+                        name = person["userName"].split()[0]
+                        _LOGGER.debug("Huskelisten for " + name)
+                        huskel = ""
+                        reminders = person["teamReminders"]
+                        if len(reminders) > 0:
+                            for reminder in reminders:
+                                local_timezone = (
+                                    datetime.datetime.now(datetime.timezone.utc)
+                                    .astimezone()
+                                    .tzinfo
+                                )
+                                due_date = datetime.datetime.strptime(
+                                    reminder["dueDate"], "%Y-%m-%dT%H:%M:%SZ"
+                                )
+                                local_due_date = (
+                                    due_date.replace(tzinfo=datetime.timezone.utc)
+                                    .astimezone(local_timezone)
+                                    .strftime("%A %d. %B")
+                                )
+                                huskel = huskel + "<h3>" + local_due_date + "</h3>"
+                                subjectName = (
+                                    reminder["subjectName"]
+                                    if "subjectName" in reminder
+                                    else ""
+                                )
+                                huskel = huskel + "<b>" + subjectName + "</b><br>"
+                                huskel = (
+                                    huskel + "af " + reminder["createdBy"] + "<br><br>"
+                                )
+                                content = re.sub(
+                                    r"([0-9]+)(\.)", r"\1\.", reminder["reminderText"]
+                                )
+                                huskel = huskel + content + "<br><br>"
+                        else:
+                            huskel = huskel + str(name) + " har ingen påmindelser."
+                        self.huskeliste[name] = huskel
+
+                # End Huskelisten
+                if "0004" in self.widgets:
+                    # Try Meebook:
+                    _LOGGER.debug("In the Meebook flow...")
+                    token = self.get_token("0004")
+                    # _LOGGER.debug("Token "+token)
+                    headers = {
+                        "authority": "app.meebook.com",
+                        "accept": "application/json",
+                        "authorization": token,
+                        "dnt": "1",
+                        "origin": "https://www.aula.dk",
+                        "referer": "https://www.aula.dk/",
+                        "sessionuuid": self._mitid_username,
+                        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
+                        "x-version": "1.0",
+                    }
+                    childFilter = "&childFilter[]=".join(self._childuserids)
+                    institutionFilter = "&institutionFilter[]=".join(
+                        self._institutionProfiles
+                    )
+                    get_payload = (
+                        "/relatedweekplan/all?currentWeekNumber="
+                        + week
+                        + "&userProfile=guardian&childFilter[]="
+                        + childFilter
+                        + "&institutionFilter[]="
+                        + institutionFilter
+                    )
+
+                    mock_meebook = 0
+                    if mock_meebook == 1:
+                        _LOGGER.warning("Using mock data for Meebook ugeplaner.")
+                        mock_meebook = '[{"id":490000,"name":"Emilie efternavn","unilogin":"lud...","weekPlan":[{"date":"mandag 28. nov.","tasks":[{"id":3069630,"type":"comment","author":"Met...","group":"3.a - ugeplan","pill":"Ingen fag tilknyttet","content":"I denne uge er der omlagt uge p\u00e5 hele skolen.\n\nMandag har vi \nKlippeklistredag:\n\nMan m\u00e5 gerne have nissehuer p\u00e5 :)\n\nMedbring gerne en god saks, limstift, skabeloner mm. \n\nB\u00f8rnene skal ogs\u00e5 medbringe et vasket syltet\u00f8jsglas eller lign., som vi skal male p\u00e5. S\u00f8rg gerne for at der ikke er m\u00e6rker p\u00e5:-)\n\n1. lektion: Morgenb\u00e5nd med l\u00e6sning/opgaver\n\n2. lektion: \nVi laver f\u00e6lles julenisser efter en bestemt skabelon.\n\n3. - 5. lektion: \nVi julehygger med musik og kreative projekter. Vi pynter vores f\u00e6lles juletr\u00e6, og synger julesange. \n\n6. lektion:\nAfslutning og oprydning.","editUrl":"https://app.meebook.com//arsplaner/dlap//956783//202248"}]},{"date":"tirsdag 29. nov.","tasks":[{"id":3069630,"type":"comment","author":"Met...","group":"3.a - ugeplan","pill":"Ingen fag tilknyttet","content":"Omlagt uge:\n\n1. lektion\nMorgenb\u00e5nd med l\u00e6sning og opgaver.\n\n2. lektion\nVi starter p\u00e5 storylineforl\u00f8b om jul. Vi taler om nisser og danner nissefamilier i klassen.\n\n3.-5. lektion\nVi lave et juleprojekt med filt...\n\n6. lektion\nVi arbejder med en kreativ opgave om v\u00e5benskold.","editUrl":"https://app.meebook.com//arsplaner/dlap//956783//202248"}]},{"date":"onsdag 30. nov.","tasks":[{"id":3069630,"type":"comment","author":"Met...","group":"3.a - ugeplan","pill":"Ingen fag tilknyttet","content":"Omlagt uge:\n\n1. -2. lektion\nVi skal til foredrag med SOS B\u00f8rnebyerne om omvendt julekalender.\n\n3-4. lektion\nVi skriver nissehistorier om nissefamilierne.\n\n5.-6. lektion\nVi laver jule-postel\u00f8b, hvor posterne skal l\u00e6ses med en kodel\u00e6ser.","editUrl":"https://app.meebook.com//arsplaner/dlap//956783//202248"}]},{"date":"torsdag 1. dec.","tasks":[{"id":3069630,"type":"comment","author":"Met...","group":"3.a - ugeplan","pill":"Ingen fag tilknyttet","content":"Omlagt uge:\n\n1. lektion\nMorgenb\u00e5nd med l\u00e6sning og opgaver. \nVi arbejder med l\u00e6s og forst\u00e5 i en julehistorie.\n\n2.-5. lektion\nVi skal arbejde med et kreativt juleprojekt, hvor der laves huse til nisserne.\n\n6. lektion\nSe SOS b\u00f8rnebyernes julekalender og afrunding af dagen.","editUrl":"https://app.meebook.com//arsplaner/dlap//956783//202248"}]},{"date":"fredag 2. dec.","tasks":[{"id":3069630,"type":"comment","author":"Met...","group":"3.a - ugeplan","pill":"Ingen fag tilknyttet","content":"1. lektion\nMorgenb\u00e5nd med l\u00e6sning og opgaver samt julehygge, hvor vi l\u00e6ser julehistorie \n\n2. lektion:\nVi skal lave et julerim og skrive det ind p\u00e5 en flot julenisse samt tegne nissen. \n\n3.-4. lektion\nVi skal lave jule-postel\u00f8b p\u00e5 skolen. \n\n5.. lektion\nVi skal l\u00f8se et hemmeligt kodebrev ved hj\u00e6lp af en kodel\u00e6ser. \n\nVi evaluerer og afrunder ugen.","editUrl":"https://app.meebook.com//arsplaner/dlap//956783//202248"}]}]},{"id":630000,"name":"Ann...","unilogin":"ann...","weekPlan":[{"date":"mandag 28. nov.","tasks":[{"id":3090189,"type":"comment","author":"May...","group":"0C (22/23)","pill":"B\u00f8rnehaveklasse, B\u00f8rnehaveklassen, Dansk, Matematik","content":"I dag skal vi h\u00f8re om jul i Norge og lave Norsk julepynt.\nEfter 12 pausen skal vi h\u00f8re om julen i Danmark f\u00f8r juletr\u00e6et og andestegen.\nVi skal farvel\u00e6gge g\u00e5rdnisserne der passede p\u00e5 g\u00e5rdene i gamle dage.","editUrl":"https://app.meebook.com//arsplaner/dlap//899210//202248"}]},{"date":"tirsdag 29. nov.","tasks":[{"id":3090189,"type":"comment","author":"May...","group":"0C (22/23)","pill":"B\u00f8rnehaveklasse, B\u00f8rnehaveklassen, Dansk, Matematik","content":"I dag skal vi arbejde med julen i Gr\u00f8nland og lave gr\u00f8nlandske julehuse.\nEfter 12 pausen skal vi h\u00f8re om JUletr\u00e6et der flytter ind i de danske stuer. Vi skal tale om hvor det stammer fra og hvad der var p\u00e5 juletr\u00e6et i gamle dage . Blandt andet den spiselige pynt.\nVi taler om Peters jul og at der ikke altid har v\u00e6ret en stjerne i toppen. Vi klipper storke til juletr\u00e6stoppen","editUrl":"https://app.meebook.com//arsplaner/dlap//899210//202248"}]},{"date":"onsdag 30. nov.","tasks":[{"id":3090189,"type":"comment","author":"May...","group":"0C (22/23)","pill":"B\u00f8rnehaveklasse, B\u00f8rnehaveklassen, Dansk, Matematik","content":"I dag st\u00e5r den p\u00e5 Jul i Finland og finske juletraditioner. Vi klipper finske julestjerner.\nEfter pausen skal vi arbejde videre med jul og julepynt gennem tiden i dk. \nVi skal tale om hvorfor der er flag, trompeter og trommer p\u00e5 tr\u00e6et (krigen i 1864) og vi skal lave gammeldags silkeroser og musetrapper til tr\u00e6et","editUrl":"https://app.meebook.com//arsplaner/dlap//899210//202248"}]},{"date":"torsdag 1. dec.","tasks":[{"id":3090189,"type":"comment","author":"May...","group":"0C (22/23)","pill":"B\u00f8rnehaveklasse, B\u00f8rnehaveklassen, Dansk, Matematik","content":"I dag skal vi p\u00e5 en juletur med hygge og posl\u00f8b til trylleskoven \nBussen k\u00f8rer os derud kl 10 og vi er senest tilbage n\u00e5r skoledagen slutter .\nHusk at f\u00e5 varmt praktisk t\u00f8j p\u00e5 og en turtaske med en let tilg\u00e6ngelig madpakke der kan spises i det fri. Regnbukser eller overtr\u00e6ksbukser s\u00e5 man kan sidde p\u00e5 jorden.","editUrl":"https://app.meebook.com//arsplaner/dlap//899210//202248"}]},{"date":"fredag 2. dec.","tasks":[{"id":3090189,"type":"comment","author":"May...","group":"0C (22/23)","pill":"B\u00f8rnehaveklasse, B\u00f8rnehaveklassen, Dansk, Matematik","content":"Klippe/ klistre dag .\nHusk at tage lim, saks og kaffe m.m., kop og tallerkner med hjemmefra. Hvis i tager kage med er det til en buffet i klassen.","editUrl":"https://app.meebook.com//arsplaner/dlap//899210//202248"}]}]}]'
+                        data = json.loads(mock_meebook, strict=False)
+                    else:
+                        response = requests.get(
+                            MEEBOOK_API + get_payload, headers=headers, verify=True
+                        )
+                        data = json.loads(response.text, strict=False)
+                        # _LOGGER.debug("Meebook ugeplan raw response from week "+week+": "+str(response.text))
+
+                    if "exceptionMessage" in data:
+                        _LOGGER.warning(
+                            "Ignoring error in fetching data from Meebook. Error exception message: "
+                            + data["exceptionMessage"]
+                        )
+                    else:
+                        for person in data:
+                            _LOGGER.debug("Meebook ugeplan for " + person["name"])
+                            ugep = ""
+                            ugeplan = person["weekPlan"]
+                            for day in ugeplan:
+                                ugep = ugep + "<h3>" + day["date"] + "</h3>"
+                                if len(day["tasks"]) > 0:
+                                    for task in day["tasks"]:
+                                        if not task["pill"] == "Ingen fag tilknyttet":
+                                            ugep = (
+                                                ugep + "<b>" + task["pill"] + "</b><br>"
+                                            )
+                                        author = task.get("author")
+                                        if author:
+                                            ugep = ugep + author + "<br><br>"
+                                        if (
+                                            task["type"] == "comment"
+                                            or task["type"] == "task"
+                                        ):
+                                            content = re.sub(
+                                                r"([0-9]+)(\.)",
+                                                r"\1\.",
+                                                task["content"],
+                                            )
+                                        elif task["type"] == "assignment":
+                                            content = re.sub(
+                                                r"([0-9]+)(\.)", r"\1\.", task["title"]
+                                            )
+                                        ugep = ugep + content + "<br><br>"
+                                else:
+                                    ugep = ugep + "-"
+                            try:
+                                name = person["name"].split()[0]
+                            except:
+                                name = person["name"]
+                            if thisnext == "this":
+                                self.ugep_attr[name] = ugep
+                            elif thisnext == "next":
+                                self.ugepnext_attr[name] = ugep
+
+            now = datetime.datetime.now() + datetime.timedelta(weeks=1)
+            thisweek = datetime.datetime.now().strftime("%Y-W%V")
+            nextweek = now.strftime("%Y-W%V")
+            ugeplan(thisweek, "this")
+            ugeplan(nextweek, "next")
+            # _LOGGER.debug("End result of ugeplan object: "+str(self.ugep_attr))
+        # End of Ugeplaner
+        return True
