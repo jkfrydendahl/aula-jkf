@@ -52,19 +52,62 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  // Auto-refresh presence every 60 seconds
+  // Auto-refresh presence every 60 seconds, messages/posts every 5 minutes
+  // Pauses when tab is not visible (saves battery/bandwidth on mobile)
   useEffect(() => {
     if (children.length === 0) return;
-    const interval = setInterval(async () => {
-      try {
-        const presenceMap: Record<string, Presence> = {};
-        for (const child of children) {
-          presenceMap[child.id] = await api.getPresence(child.id);
-        }
-        setPresence(presenceMap);
-      } catch { /* silent refresh failure */ }
-    }, 60000);
-    return () => clearInterval(interval);
+
+    let presenceInterval: ReturnType<typeof setInterval>;
+    let contentInterval: ReturnType<typeof setInterval>;
+
+    function startIntervals() {
+      presenceInterval = setInterval(async () => {
+        if (document.hidden) return;
+        try {
+          const presenceMap: Record<string, Presence> = {};
+          for (const child of children) {
+            presenceMap[child.id] = await api.getPresence(child.id);
+          }
+          setPresence(presenceMap);
+        } catch { /* silent refresh failure */ }
+      }, 60000);
+
+      contentInterval = setInterval(async () => {
+        if (document.hidden) return;
+        try {
+          const [messagesData, postsData] = await Promise.all([
+            api.getMessages(),
+            api.getPosts(),
+          ]);
+          setMessages(messagesData);
+          setPosts(postsData);
+        } catch { /* silent refresh failure */ }
+      }, 300000);
+    }
+
+    // Refresh immediately when tab becomes visible again
+    function handleVisibilityChange() {
+      if (!document.hidden) {
+        (async () => {
+          try {
+            const presenceMap: Record<string, Presence> = {};
+            for (const child of children) {
+              presenceMap[child.id] = await api.getPresence(child.id);
+            }
+            setPresence(presenceMap);
+          } catch { /* ignore */ }
+        })();
+      }
+    }
+
+    startIntervals();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(presenceInterval);
+      clearInterval(contentInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [children]);
 
   async function loadData() {

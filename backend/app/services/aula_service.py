@@ -65,8 +65,11 @@ class AulaService:
         return children
 
     def get_presence(self, child_id: str) -> dict[str, Any]:
-        """Return presence info for a child."""
-        overview = self._client._daily_overview.get(child_id)
+        """Return presence info for a child (always fetches fresh data)."""
+        self._ensure_tokens_loaded()
+
+        # Fetch fresh daily overview (not cached)
+        overview = self._client.get_daily_overview(int(child_id))
         if not overview:
             return {"child_id": child_id, "status": "unknown"}
 
@@ -79,17 +82,20 @@ class AulaService:
                 break
 
         # Map Aula state codes to our status strings
-        # Known states: 0=ikke til stede, 1=til stede(?), 8=gået hjem
+        # Known states from getPresenceStates:
+        # 0=ikke til stede, 1=syg, 8=gået hjem
+        # Unknown yet: which code = "til stede" (checked in)
         state_map = {
             0: "not_present",
-            1: "checked_in",
-            2: "checked_in",  # might be "on trip" etc
-            3: "checked_in",
+            1: "sick",
             8: "checked_out",
         }
 
         if aula_state is not None:
             status = state_map.get(aula_state, "not_present")
+            # Fallback: if state code unknown but checkInTime is set, treat as checked in
+            if status == "not_present" and overview.get("checkInTime"):
+                status = "checked_in"
         else:
             # Fallback to checkInTime/checkOutTime
             check_in = overview.get("checkInTime")
@@ -101,9 +107,9 @@ class AulaService:
             else:
                 status = "not_present"
 
-        # Check for sick/vacation from daily overview
+        # Also check activityType from daily overview as backup
         activity_type = overview.get("activityType", 0)
-        if activity_type == 1:
+        if activity_type == 1 and status != "sick":
             status = "sick"
         elif activity_type == 2:
             status = "absent"

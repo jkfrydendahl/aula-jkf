@@ -243,6 +243,20 @@ class AulaClient:
         )
         return res.json().get("data", [])
 
+    def get_daily_overview(self, child_id: int) -> dict | None:
+        """Fetch fresh daily overview for a single child."""
+        self._ensure_valid_token()
+        res = self._session.get(
+            self.apiurl
+            + f"?method=presence.getDailyOverview&childIds[]={child_id}"
+            + self._get_access_token_param(),
+            verify=True,
+        )
+        data = res.json().get("data", [])
+        if data and len(data) > 0:
+            return data[0]
+        return None
+
     def update_presence_template(self, institution_profile_id: int, date: str, presence_activity: dict, comment: str | None = None) -> dict:
         """Update presence template (pickup type, times, etc.)."""
         csrf_token = self._get_csrf_token()
