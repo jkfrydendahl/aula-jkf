@@ -153,6 +153,9 @@ export const api = {
       body: JSON.stringify({ identity }),
     }),
 
+  authCheck: () =>
+    request<{ authenticated: boolean; reason?: string }>("/auth/check"),
+
   // Data
   getChildren: () => request<Child[]>("/children"),
   getPresence: (childId: string) => request<Presence>(`/presence/${childId}`),

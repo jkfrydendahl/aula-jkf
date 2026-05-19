@@ -4,6 +4,8 @@ import threading
 import logging
 from typing import Optional
 
+import httpx
+
 from app.models.schemas import AuthFlowStatus, TokenData
 from app.repositories.token_repository import TokenRepository
 
@@ -13,8 +15,11 @@ _LOGGER = logging.getLogger(__name__)
 class AuthService:
     """Manages the MitID authentication flow lifecycle."""
 
-    def __init__(self, token_repository: TokenRepository, login_client_class=None):
+    def __init__(self, token_repository: TokenRepository, login_client_class=None,
+                 sync_target_url: str = "", admin_secret: str = ""):
         self._token_repository = token_repository
+        self._sync_target_url = sync_target_url
+        self._admin_secret = admin_secret
         # Default to real AulaLoginClient if not injected (for testing)
         if login_client_class is None:
             from app.aula_login_client.client import AulaLoginClient
@@ -130,6 +135,10 @@ class AuthService:
                     expires_at=expires_at,
                 )
                 self._token_repository.save(token_model)
+
+                # Auto-sync tokens to remote (Railway) if configured
+                self._sync_tokens_to_remote(token_model)
+
                 flow["status"] = AuthFlowStatus.COMPLETE
                 flow["message"] = "Login successful"
                 _LOGGER.info(f"Flow {flow_id}: authentication complete")
@@ -148,3 +157,30 @@ class AuthService:
             done_event = flow.get("done_event")
             if done_event:
                 done_event.set()
+
+    def _sync_tokens_to_remote(self, tokens: TokenData):
+        """Push tokens to the remote Railway instance after local auth."""
+        if not self._sync_target_url or not self._admin_secret:
+            _LOGGER.debug("Token sync not configured, skipping")
+            return
+
+        try:
+            url = f"{self._sync_target_url.rstrip('/')}/auth/upload-tokens"
+            response = httpx.post(
+                url,
+                json=tokens.model_dump(),
+                headers={"X-Admin-Secret": self._admin_secret},
+                timeout=10.0,
+            )
+            if response.status_code == 200:
+                _LOGGER.info(f"Tokens synced to remote: {self._sync_target_url}")
+            else:
+                _LOGGER.error(f"Token sync failed: {response.status_code} {response.text}")
+        except Exception as e:
+            _LOGGER.error(f"Token sync error: {e}")
+
+    def upload_tokens(self, tokens: TokenData) -> bool:
+        """Accept uploaded tokens (called from the upload endpoint on Railway)."""
+        self._token_repository.save(tokens)
+        _LOGGER.info("Tokens uploaded and saved successfully")
+        return True

@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [vacations, setVacations] = useState<VacationRegistration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authNeeded, setAuthNeeded] = useState(false);
   const [selectedThread, setSelectedThread] = useState<ThreadDetail | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
   const [childFilter, setChildFilter] = useState<string>("all");
@@ -113,6 +114,19 @@ export default function DashboardPage() {
   async function loadData() {
     try {
       setLoading(true);
+
+      // Check if backend has valid tokens
+      try {
+        const authStatus = await api.authCheck();
+        if (!authStatus.authenticated) {
+          setAuthNeeded(true);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // If auth check fails, try loading data anyway
+      }
+
       const [childrenData, messagesData, postsData, vacationsData] = await Promise.all([
         api.getChildren(),
         api.getMessages(),
@@ -332,6 +346,33 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (authNeeded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg text-center space-y-4">
+          <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">Login påkrævet</h2>
+          <p className="text-gray-600">
+            Din session er udløbet. Log ind igen fra dit hjemmenetværk for at forny adgangen.
+          </p>
+          <a
+            href="/login"
+            className="inline-block w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+          >
+            Log ind med MitID
+          </a>
+          <p className="text-xs text-gray-400">
+            Login kræver en hjemmenetværksforbindelse (WiFi/kabel).
+          </p>
+        </div>
       </div>
     );
   }

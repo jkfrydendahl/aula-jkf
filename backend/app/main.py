@@ -43,7 +43,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Services
     aula_service = AulaService(aula_client, token_repository=token_repo)
-    auth_service = AuthService(token_repository=token_repo)
+    auth_service = AuthService(
+        token_repository=token_repo,
+        sync_target_url=settings.sync_target_url,
+        admin_secret=settings.admin_secret,
+    )
     push_service = PushService(
         push_repository=push_repo,
         vapid_private_key=settings.vapid_private_key,
@@ -84,16 +88,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         token_repository=token_repo,
         renew_token_fn=renew_token,
     )
+    # CORS — support multiple origins (comma-separated)
+    origins = [o.strip() for o in settings.frontend_url.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.frontend_url],
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
     # Routers
-    app.include_router(create_auth_router(auth_service))
+    app.include_router(create_auth_router(auth_service, admin_secret=settings.admin_secret))
     app.include_router(create_data_router(aula_service))
     app.include_router(create_action_router(aula_service))
     app.include_router(create_push_router(push_service))

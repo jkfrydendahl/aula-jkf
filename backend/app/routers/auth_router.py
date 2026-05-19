@@ -1,15 +1,17 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
+from typing import Optional
 
 from app.models.schemas import (
     AuthStartRequest,
     AuthStatusResponse,
     AuthFlowStatus,
     IdentitySelectRequest,
+    TokenData,
 )
 from app.services.auth_service import AuthService
 
 
-def create_auth_router(auth_service: AuthService) -> APIRouter:
+def create_auth_router(auth_service: AuthService, admin_secret: str = "") -> APIRouter:
     router = APIRouter(prefix="/auth", tags=["auth"])
 
     @router.post("/start")
@@ -48,5 +50,33 @@ def create_auth_router(auth_service: AuthService) -> APIRouter:
                 detail="Flow not found or not waiting for identity selection",
             )
         return {"status": "ok"}
+
+    @router.post("/upload-tokens")
+    def upload_tokens(
+        tokens: TokenData,
+        x_admin_secret: Optional[str] = Header(None),
+    ):
+        """Accept tokens synced from a local instance. Protected by admin secret."""
+        if not admin_secret:
+            raise HTTPException(status_code=503, detail="Token upload not configured")
+        if x_admin_secret != admin_secret:
+            raise HTTPException(status_code=403, detail="Invalid admin secret")
+
+        auth_service.upload_tokens(tokens)
+        return {"status": "ok", "message": "Tokens saved"}
+
+    @router.get("/check")
+    def check_auth():
+        """Check if the backend has valid tokens."""
+        # Quick check if tokens exist and are not expired
+        from app.repositories.token_repository import TokenRepository
+        import time
+        repo = auth_service._token_repository
+        stored = repo.load()
+        if not stored:
+            return {"authenticated": False, "reason": "no_tokens"}
+        if stored.expires_at < time.time():
+            return {"authenticated": False, "reason": "expired"}
+        return {"authenticated": True}
 
     return router

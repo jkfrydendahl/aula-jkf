@@ -18,4 +18,11 @@ class Settings(BaseSettings):
     # CORS
     frontend_url: str = "http://localhost:3000"
 
+    # Token sync: secret to protect the upload endpoint
+    admin_secret: str = ""
+
+    # Token sync: remote URL to push tokens to after local auth
+    # Set this on local instance to auto-sync to Railway after login
+    sync_target_url: str = ""
+
     model_config = {"env_prefix": "AULA_"}
