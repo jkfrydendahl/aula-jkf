@@ -310,7 +310,7 @@ class AulaClient:
             headers=headers,
             verify=True,
         )
-        _LOGGER.debug(f"markThreadAsRead response: {res.status_code} {res.text[:200]}")
+        _LOGGER.info(f"markThreadAsRead response: {res.status_code} {res.text[:300]}")
         if res.status_code == 200:
             data = res.json()
             return data.get("status", {}).get("message") == "OK"
