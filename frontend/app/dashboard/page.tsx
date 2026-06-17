@@ -203,7 +203,7 @@ export default function DashboardPage() {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dayOfWeek = d.getDay();
       if (dayOfWeek === 0 || dayOfWeek === 6) continue;
-      days.push({ date: d.toISOString().split("T")[0], isComing: true });
+      days.push({ date: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`, isComing: true });
     }
     setVacationDays(days);
 
@@ -268,8 +268,14 @@ export default function DashboardPage() {
       [childId]: { ...prev[childId], status },
     }));
     try {
-      await api.updatePresence(childId, status);
-      showToast("Status opdateret");
+      const result = await api.updatePresence(childId, status);
+      if (result.success) {
+        showToast("Status opdateret");
+      } else {
+        showToast("Kunne ikke opdatere status", "error");
+        const p = await api.getPresence(childId);
+        setPresence((prev) => ({ ...prev, [childId]: p }));
+      }
     } catch {
       showToast("Kunne ikke opdatere status", "error");
       // Revert on failure — reload presence
@@ -286,8 +292,12 @@ export default function DashboardPage() {
       [childId]: { ...prev[childId], status: isSick ? "sick" : "planned" },
     }));
     try {
-      await api.updateSickStatus(childId, isSick);
-      showToast(isSick ? "Meldt syg" : "Sygemelding fjernet");
+      const result = await api.updateSickStatus(childId, isSick);
+      if (result.success) {
+        showToast(isSick ? "Meldt syg" : "Sygemelding fjernet");
+      } else {
+        showToast("Kunne ikke opdatere sygestatus", "error");
+      }
       // Refresh presence to get accurate state
       const p = await api.getPresence(childId);
       setPresence((prev) => ({ ...prev, [childId]: p }));
@@ -324,10 +334,11 @@ export default function DashboardPage() {
   async function submitPickup() {
     if (!pickupFormChild) return;
     setPickupSubmitting(true);
-    const today = new Date().toISOString().split("T")[0];
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
     const entryTime = presence[pickupFormChild]?.planned_start?.slice(0, 5) || "06:30";
     try {
-      await api.updatePresenceTemplate({
+      const result = await api.updatePresenceTemplate({
         child_id: pickupFormChild,
         date: today,
         activity_type: pickupType,
@@ -335,11 +346,15 @@ export default function DashboardPage() {
         exit_time: pickupExitTime,
         exit_with: pickupType === 0 || pickupType === 3 ? pickupExitWith : undefined,
       });
-      // Refresh presence data
-      const p = await api.getPresence(pickupFormChild);
-      setPresence((prev) => ({ ...prev, [pickupFormChild!]: p }));
-      setPickupFormChild(null);
-      showToast("Hentetype opdateret");
+      if (!result.success) {
+        showToast("Fejl ved opdatering af hentetype", "error");
+      } else {
+        // Refresh presence data
+        const p = await api.getPresence(pickupFormChild);
+        setPresence((prev) => ({ ...prev, [pickupFormChild!]: p }));
+        setPickupFormChild(null);
+        showToast("Hentetype opdateret");
+      }
     } catch (e) {
       showToast("Fejl ved opdatering af hentetype", "error");
     } finally {

@@ -71,6 +71,10 @@ class AuthService:
             except Exception:
                 pass  # QR not ready yet
 
+        # Clean up terminal flows after they've been fetched
+        if flow["status"] in (AuthFlowStatus.COMPLETE, AuthFlowStatus.ERROR):
+            self._flows.pop(flow_id, None)
+
         return flow
 
     def select_identity(self, flow_id: str, identity_index: int) -> bool:

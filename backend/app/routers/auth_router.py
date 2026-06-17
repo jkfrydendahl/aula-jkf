@@ -75,12 +75,15 @@ def create_auth_router() -> APIRouter:
         if x_admin_secret != admin_secret:
             raise HTTPException(status_code=403, detail="Invalid admin secret")
 
-        # Resolve target user's auth service by user_id in the token payload, or default
-        user_id = tokens.user_id if hasattr(tokens, "user_id") and tokens.user_id else "default"
+        # Resolve target user by user_id in payload, fall back to first user
+        user_id = tokens.user_id if tokens.user_id else None
         registry = request.app.state.user_registry
-        entry = registry.get(user_id) or next(iter(registry.values()), None)
-        if not entry:
-            raise HTTPException(status_code=404, detail="No user configured")
+        entry = registry.get(user_id) if user_id else None
+        if entry is None:
+            if len(registry) == 1:
+                entry = next(iter(registry.values()))
+            else:
+                raise HTTPException(status_code=400, detail="user_id required for multi-user setup")
         entry["auth_service"].upload_tokens(tokens)
         return {"status": "ok", "message": "Tokens saved"}
 

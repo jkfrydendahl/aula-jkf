@@ -8,6 +8,7 @@ class TokenData(BaseModel):
     access_token: str
     refresh_token: str
     expires_at: float
+    user_id: Optional[str] = None
 
 
 class AuthFlowStatus(str, Enum):
