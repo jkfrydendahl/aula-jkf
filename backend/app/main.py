@@ -110,14 +110,30 @@ def create_app(
         allow_headers=["*"],
     )
 
-    # Global exception handler — ensures CORS headers are present on errors
+    # Global exception handler — manually adds CORS headers because FastAPI's
+    # exception_handler fires before CORSMiddleware can wrap the response.
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
+        from app.aula_client import AulaAuthRequiredError
         _LOGGER.error(f"Unhandled error on {request.method} {request.url.path}: {exc}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": str(exc)},
+
+        status = 401 if isinstance(exc, AulaAuthRequiredError) else 500
+        content = (
+            {"detail": "Authentication required", "re_auth_required": True}
+            if isinstance(exc, AulaAuthRequiredError)
+            else {"detail": str(exc)}
         )
+
+        response = JSONResponse(status_code=status, content=content)
+
+        # Manually add CORS headers so the browser can read the error body
+        origin = request.headers.get("origin", "")
+        if origin in origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Vary"] = "Origin"
+
+        return response
 
     @app.get("/health")
     async def health():
