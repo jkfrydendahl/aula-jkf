@@ -305,7 +305,7 @@ class AulaService:
 
                 messages.append({
                     "id": str(msg.get("id", "")),
-                    "sender": msg.get("sender", {}).get("fullName", "Ukendt"),
+                    "sender": (msg.get("sender") or {}).get("fullName", "Ukendt"),
                     "timestamp": msg.get("sendDateTime", ""),
                     "text": text,
                     "attachments": attachments,

@@ -159,24 +159,19 @@ export default function DashboardPage() {
     try {
       const detail = await api.getThread(msg.id);
       setSelectedThread(detail);
+      // Auto-mark as read when opening
+      if (!msg.is_read) {
+        setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: true } : m)));
+        api.markRead(msg.id).catch(() => {});
+      }
     } catch (err) {
       console.error("Failed to load thread:", err);
+      showToast("Kunne ikke åbne beskeden", "error");
     } finally {
       setThreadLoading(false);
     }
   }
 
-  async function markAsRead(e: React.MouseEvent, msg: Message) {
-    e.stopPropagation();
-    setMessages((prev) =>
-      prev.map((m) => (m.id === msg.id ? { ...m, is_read: true } : m))
-    );
-    try {
-      await api.markRead(msg.id);
-    } catch {
-      // Best-effort — UI already updated
-    }
-  }
 
   async function openVacation(vac: VacationRegistration) {
     setSelectedVacation(vac);
@@ -340,6 +335,10 @@ export default function DashboardPage() {
   async function enableNotifications() {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       showToast("Push notifikationer understøttes ikke i denne browser", "error");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      showToast("Notifikationer er blokeret — aktiver dem i browser-/systemindstillinger", "error");
       return;
     }
     const permission = await Notification.requestPermission();
@@ -755,14 +754,6 @@ export default function DashboardPage() {
                       <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                         {msg.timestamp ? new Date(msg.timestamp).toLocaleDateString("da-DK") : ""}
                       </time>
-                      <button
-                        onClick={(e) => !msg.is_read && markAsRead(e, msg)}
-                        className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full ${msg.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-300 cursor-default" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50 cursor-pointer"}`}
-                        title={msg.is_read ? "Allerede læst" : "Markér som læst"}
-                        disabled={msg.is_read}
-                      >
-                        {msg.is_read ? "Læst" : "Markér læst"}
-                      </button>
                     </div>
                   </div>
                 </div>
