@@ -212,25 +212,20 @@ export default function DashboardPage() {
     if (!selectedVacation) return;
     setVacationSubmitting(true);
     try {
-      const childId = parseInt(selectedVacation.child_id);
-      const responseId = selectedVacation.response_id;
-      const toPayload = (days: typeof vacationDays) =>
-        days.map((d) => ({ date: d.date, isComing: d.isComing, entryTime: "", exitTime: "" }));
-
-      const comingDays = vacationDays.filter((d) => d.isComing);
-      const notComingDays = vacationDays.filter((d) => !d.isComing);
-      const isMixed = comingDays.length > 0 && notComingDays.length > 0;
-
-      let result;
-      if (isMixed) {
-        // Submit each group separately — Aula doesn't clear isMissingAnswer for mixed payloads
-        const r1 = await api.submitVacationResponse(responseId, childId, toPayload(comingDays));
-        const r2 = await api.submitVacationResponse(responseId, childId, toPayload(notComingDays));
-        result = { success: r1.success && r2.success };
-      } else {
-        result = await api.submitVacationResponse(responseId, childId, toPayload(vacationDays));
-      }
-
+      const childPresence = presence[selectedVacation.child_id];
+      const entryTime = childPresence?.planned_start?.slice(0, 5) || "07:30";
+      const exitTime = childPresence?.planned_end?.slice(0, 5) || "16:30";
+      const payload = vacationDays.map((d) => ({
+        date: d.date,
+        isComing: d.isComing,
+        entryTime: d.isComing ? entryTime : "",
+        exitTime: d.isComing ? exitTime : "",
+      }));
+      const result = await api.submitVacationResponse(
+        selectedVacation.response_id,
+        parseInt(selectedVacation.child_id),
+        payload
+      );
       if (result.success) {
         setVacations((prev) =>
           prev.map((v) =>

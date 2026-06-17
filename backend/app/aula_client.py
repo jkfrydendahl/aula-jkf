@@ -208,7 +208,7 @@ class AulaClient:
             verify=True,
         )
         result = res.json()
-        _LOGGER.warning(f"Vacation submit response: {result}")
+        _LOGGER.info(f"Vacation submit response: {result}")
         return result
 
     def get_pickup_responsibles(self, institution_profile_id: int) -> list[dict]:
