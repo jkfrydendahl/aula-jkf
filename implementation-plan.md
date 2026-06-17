@@ -765,7 +765,52 @@ Do not bind backend publicly.
 
 ---
 
-# Final Production Principle
+# Phase 5 — Multi-User Support
+
+## Goal
+
+Allow two independent users, each with their own Aula account, MitID login, and stored tokens. Users are selected on the login screen.
+
+## Configuration
+
+Add per-user env vars:
+
+```env
+APP_USER_1_NAME=Jesper
+APP_USER_1_PASSWORD=<password>
+APP_USER_1_TOKEN_PATH=/app/data/tokens_user1.json
+
+APP_USER_2_NAME=<name>
+APP_USER_2_PASSWORD=<password>
+APP_USER_2_TOKEN_PATH=/app/data/tokens_user2.json
+```
+
+Remove single-user `APP_AUTH_PASSWORD` once multi-user is in place.
+
+## Backend changes
+
+- `AppAuthSettings` replaced by a list of user configs loaded from env
+- Session cookie carries the authenticated user identity (e.g. `user_id: "1"`)
+- `require_app_auth` dependency extracts user identity from session
+- `AulaService`/`AulaClient` instantiated per user, or looked up from a registry keyed by user id
+- `/app-auth/login` accepts `{ "username": "...", "password": "..." }` and sets session with user identity
+- `/auth/start`, `/auth/check` etc. operate on the token store for the authenticated user
+
+## Frontend changes
+
+- Password gate shows user selector (dropdown or two named buttons) before password field
+- After selecting user + entering password, session is established for that user
+- All subsequent Aula calls use that user's session/tokens
+
+## Acceptance criteria
+
+- User 1 logs in → sees User 1's children
+- User 2 logs in → sees User 2's children
+- Neither user can see the other's data
+- Each user can do their own MitID login independently
+- Token persistence works per user after container restart
+
+---
 
 The production setup is only acceptable if this remains true:
 
