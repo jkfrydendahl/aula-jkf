@@ -207,7 +207,9 @@ class AulaClient:
             headers=headers,
             verify=True,
         )
-        return res.json()
+        result = res.json()
+        _LOGGER.info(f"Vacation submit response: {result}")
+        return result
 
     def get_pickup_responsibles(self, institution_profile_id: int) -> list[dict]:
         """Fetch pickup responsibles (parents/relations) for a child."""
