@@ -28,12 +28,12 @@ class Settings(BaseSettings):
 
 
 class AppAuthSettings(BaseSettings):
-    app_auth_enabled: bool = True
-    app_auth_password: str = ""
-    app_session_secret: str = ""
-    app_session_cookie_name: str = "aula_jkf_session"
-    app_session_ttl_seconds: int = 604800
+    auth_enabled: bool = True
+    auth_password: str = ""
+    session_secret: str = ""
+    session_cookie_name: str = "aula_jkf_session"
+    session_ttl_seconds: int = 604800
     # Set to false when testing locally over HTTP (e.g. via SSH tunnel)
-    app_session_secure_cookie: bool = True
+    session_secure_cookie: bool = True
 
     model_config = {"env_prefix": "APP_"}

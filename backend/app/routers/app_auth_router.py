@@ -18,25 +18,25 @@ def create_app_auth_router() -> APIRouter:
     async def app_login(request: Request, payload: LoginRequest):
         settings = request.app.state.app_auth_settings
 
-        if not settings.app_auth_enabled:
+        if not settings.auth_enabled:
             return {"authenticated": True}
 
-        if not secrets.compare_digest(payload.password, settings.app_auth_password):
+        if not secrets.compare_digest(payload.password, settings.auth_password):
             raise HTTPException(status_code=401, detail="Invalid password")
 
-        secret = settings.app_session_secret or settings.app_auth_password
-        token = create_session_token(secret=secret, ttl_seconds=settings.app_session_ttl_seconds)
+        secret = settings.session_secret or settings.auth_password
+        token = create_session_token(secret=secret, ttl_seconds=settings.session_ttl_seconds)
 
         response = JSONResponse(content={"authenticated": True})
-        secure = settings.app_session_secure_cookie
+        secure = settings.session_secure_cookie
         response.set_cookie(
-            key=settings.app_session_cookie_name,
+            key=settings.session_cookie_name,
             value=token,
             httponly=True,
             secure=secure,
             samesite="none" if secure else "lax",
             path="/",
-            max_age=settings.app_session_ttl_seconds,
+            max_age=settings.session_ttl_seconds,
         )
         return response
 
@@ -44,9 +44,9 @@ def create_app_auth_router() -> APIRouter:
     async def app_logout(request: Request):
         settings = request.app.state.app_auth_settings
         response = JSONResponse(content={"authenticated": False})
-        secure = settings.app_session_secure_cookie
+        secure = settings.session_secure_cookie
         response.set_cookie(
-            key=settings.app_session_cookie_name,
+            key=settings.session_cookie_name,
             value="",
             path="/",
             secure=secure,
@@ -59,18 +59,18 @@ def create_app_auth_router() -> APIRouter:
     @router.get("/me")
     async def app_me(request: Request):
         settings = request.app.state.app_auth_settings
-        if not settings.app_auth_enabled:
+        if not settings.auth_enabled:
             return {"authenticated": True}
 
-        token = request.cookies.get(settings.app_session_cookie_name)
-        secret = settings.app_session_secret or settings.app_auth_password
+        token = request.cookies.get(settings.session_cookie_name)
+        secret = settings.session_secret or settings.auth_password
         if not token or not secret:
             return {"authenticated": False}
 
         is_valid = verify_session_token(
             token=token,
             secret=secret,
-            max_age=settings.app_session_ttl_seconds,
+            max_age=settings.session_ttl_seconds,
         )
         return {"authenticated": is_valid}
 
