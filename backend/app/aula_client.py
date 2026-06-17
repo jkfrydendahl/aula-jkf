@@ -296,40 +296,27 @@ class AulaClient:
         )
         return res.json().get("data", {})
 
-    def mark_thread_read(self, thread_id: int, message_ids: list[str] | None = None) -> bool:
-        """Mark a thread as read."""
+    def mark_thread_read(self, thread_id: int, subscription_id: int | None = None) -> bool:
+        """Mark a thread as read via messaging.updateSubscriptionStatus."""
         self._ensure_valid_token()
         csrf_token = self._get_csrf_token()
         headers = {"content-type": "application/json"}
         if csrf_token:
             headers["csrfp-token"] = csrf_token
-
-        attempts = [
-            ("messaging.markThreadAsRead", {"threadIds": [thread_id]}),
-            ("messaging.markThreadAsRead", {"ids": [thread_id]}),
-            ("messaging.markThreadAsRead", {"id": thread_id}),
-        ]
-        # Also try with message IDs if provided
-        if message_ids:
-            attempts += [
-                ("messaging.markThreadAsRead", {"messageIds": message_ids}),
-                ("messaging.markAsRead", {"ids": message_ids}),
-            ]
-
-        for method, payload in attempts:
-            res = self._session.post(
-                self.apiurl
-                + f"?method={method}"
-                + self._get_access_token_param(),
-                json=payload,
-                headers=headers,
-                verify=True,
-            )
-            _LOGGER.warning(f"markThreadRead [{method}] payload={payload}: {res.status_code} {res.text[:200]}")
-            if res.status_code == 200:
-                data = res.json()
-                if (data.get("status") or {}).get("message") == "OK":
-                    return True
+        sid = subscription_id if subscription_id is not None else thread_id
+        payload = {"subscriptionIds": [sid], "status": "Read"}
+        res = self._session.post(
+            self.apiurl
+            + "?method=messaging.updateSubscriptionStatus"
+            + self._get_access_token_param(),
+            json=payload,
+            headers=headers,
+            verify=True,
+        )
+        _LOGGER.info(f"updateSubscriptionStatus [{sid}]: {res.status_code} {res.text[:200]}")
+        if res.status_code == 200:
+            data = res.json()
+            return (data.get("status") or {}).get("message") == "OK"
         return False
 
     def _get_access_token_param(self):

@@ -10,6 +10,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Thread cache: {thread_id: (data, timestamp)}
 _thread_cache: dict[int, tuple[dict, float]] = {}
+_subscription_id_cache: dict[str, int] = {}
 _THREAD_CACHE_TTL = 300  # 5 minutes
 
 
@@ -163,8 +164,13 @@ class AulaService:
             regarding = thread.get("regardingChildren", [])
             child_profile_ids = [str(rc.get("profileId", "")) for rc in regarding]
             recipients = thread.get("recipients", [])
+            thread_id = str(thread.get("id", ""))
+            subscription_id = thread.get("subscriptionId") or thread.get("id")
+            # Cache subscription ID for use in mark-as-read
+            if thread_id:
+                _subscription_id_cache[thread_id] = subscription_id
             messages.append({
-                "id": str(thread.get("id", "")),
+                "id": thread_id,
                 "subject": thread.get("subject", "(ingen emne)"),
                 "sender": sender,
                 "timestamp": latest.get("sendDateTime", ""),
@@ -318,13 +324,10 @@ class AulaService:
         return result
 
     def mark_thread_read(self, thread_id: int) -> bool:
-        """Mark a thread as read, passing message IDs from cache if available."""
+        """Mark a thread as read using subscription ID."""
         self._ensure_tokens_loaded()
-        cached = _thread_cache.get(thread_id)
-        message_ids = None
-        if cached:
-            message_ids = [m["id"] for m in cached[0].get("messages", [])]
-        return self._client.mark_thread_read(thread_id, message_ids=message_ids)
+        subscription_id = _subscription_id_cache.get(str(thread_id), thread_id)
+        return self._client.mark_thread_read(thread_id, subscription_id=subscription_id)
 
     def get_calendar(self, child_id: str) -> list[dict[str, Any]]:
         """Return calendar events for a child."""
