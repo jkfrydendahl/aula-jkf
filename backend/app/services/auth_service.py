@@ -115,7 +115,7 @@ class AuthService:
                 # Block until the frontend selects an identity
                 flow["identity_event"].wait(timeout=120)
 
-                selected = flow.get("selected_identity", 1)
+                selected = flow.get("selected_identity") or 1
                 _LOGGER.info(f"Flow {flow_id}: identity {selected} selected")
                 flow["status"] = AuthFlowStatus.PENDING
                 flow["message"] = "Completing login..."

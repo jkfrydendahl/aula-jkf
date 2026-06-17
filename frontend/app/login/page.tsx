@@ -34,7 +34,7 @@ export default function LoginPage() {
         window.location.href = "/dashboard";
       } else if (result.status === "error") {
         setPolling(false);
-        setError(result.message || "Authentication failed");
+        setError(result.error || result.message || "Authentication failed");
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unknown error");

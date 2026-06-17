@@ -82,6 +82,11 @@ def create_app(
 
     configured_users = app_auth_settings.get_users()
     if not configured_users:
+        if app_auth_settings.auth_enabled:
+            raise RuntimeError(
+                "APP_AUTH is enabled but no users are configured. "
+                "Set APP_USER_1_NAME, APP_USER_1_PASSWORD, APP_USER_1_TOKEN_PATH."
+            )
         configured_users = [
             UserConfig(
                 user_id="default",

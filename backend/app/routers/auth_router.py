@@ -67,7 +67,6 @@ def create_auth_router() -> APIRouter:
         request: Request,
         tokens: TokenData,
         x_admin_secret: Optional[str] = Header(None),
-        auth_service: AuthService = Depends(get_auth_service),
     ):
         """Accept tokens synced from a local instance. Protected by admin secret."""
         admin_secret = request.app.state.settings.admin_secret
@@ -76,7 +75,13 @@ def create_auth_router() -> APIRouter:
         if x_admin_secret != admin_secret:
             raise HTTPException(status_code=403, detail="Invalid admin secret")
 
-        auth_service.upload_tokens(tokens)
+        # Resolve target user's auth service by user_id in the token payload, or default
+        user_id = tokens.user_id if hasattr(tokens, "user_id") and tokens.user_id else "default"
+        registry = request.app.state.user_registry
+        entry = registry.get(user_id) or next(iter(registry.values()), None)
+        if not entry:
+            raise HTTPException(status_code=404, detail="No user configured")
+        entry["auth_service"].upload_tokens(tokens)
         return {"status": "ok", "message": "Tokens saved"}
 
     @router.get("/check")
