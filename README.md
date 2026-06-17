@@ -1,73 +1,152 @@
-# Aula PWA
+# Aula JKF
 
-A standalone Progressive Web App for [Aula](https://aula.dk) (Danish school communication platform). Forked from [scaarup/aula](https://github.com/scaarup/aula) Home Assistant integration, rebuilt as a full-stack web app.
+Aula JKF is a private FastAPI + Next.js PWA for accessing Aula with MitID login, family-specific accounts, and push notifications.
+
+## Production setup
+
+- **Frontend:** Next.js PWA on **Vercel**
+- **Backend:** FastAPI in **Docker** on a **Webdock VPS** at `193.181.210.163`
+- **Server path:** `/opt/aula-jkf/`
+- **Backend env file:** `/opt/aula-jkf/backend.env`
+- **Persistent data:** `/opt/aula-jkf/data/`
+- **HTTPS:** Nginx on the VPS reverse-proxies traffic to the backend container
+- **Browser API access:** the frontend sends browser requests through `frontend/app/api/[...path]/route.ts`
+
+The Next.js proxy route is intentional: it keeps browser traffic same-origin and allows cookies to work correctly in the iOS Safari PWA.
 
 ## Features
 
-- **MitID login.** Full OAuth/SAML flow, QR code support.
-- **Dashboard.** Children's presence status, check-in/out times.
-- **Pickup registration.** All 4 Aula activity types (pickup, self-decider, send home, go home with).
-- **Sick registration.** Mark/unmark children as sick.
-- **Messages.** Read threads, view attachments, mark as read.
-- **Posts.** Institution posts with full content.
-- **Vacation registration.** View and respond to vacation surveys.
-- **Calendar.** School calendar events.
-- **Auto-refresh.** Presence every 60s, content every 5min, visibility-aware.
-- **Toast notifications.** Non-intrusive feedback on actions.
+- **MitID login** with QR code support
+- **Dashboard** with children presence and check-in/out times
+- **Pickup registration** for all 4 supported activity types
+- **Sick registration**
+- **Messages** with read/unread toggle
+- **Posts** for institution announcements
+- **Vacation registration** with per-day responses
+- **Push notifications** with VAPID-based web push
+- **Multi-user support** with isolated token and push storage per family member
+- **Installable PWA** on iOS and Android
+- **Auto-refresh**
+  - presence every 60 seconds
+  - content every 5 minutes
+  - refresh on visibility change when the app becomes active again
 
-## Architecture
+## Login flow
 
-```
-frontend/          Next.js 14 PWA (Vercel or self-hosted)
-backend/           FastAPI Python backend
-  app/
-    aula_client.py          Aula API client
-    aula_login_client/      MitID OAuth/SAML login flow
-    services/               Business logic layer
-    routers/                REST API endpoints
-    middleware/             Token refresh middleware
-```
+1. Open the app
+2. Select the user by name
+3. Enter that user's app password
+4. If Aula tokens exist, the user is signed in
+5. If tokens are missing, the app shows **Login påkrævet**
+6. Start the MitID flow
+7. Enter the user's MitID username
+8. Complete the approval flow, typically using the QR code
 
-## Requirements
+### Important login notes
 
-- **Must run on a residential IP.** Aula/STIL blocks all datacenter IPs (Railway, AWS, Vercel serverless, etc.)
-- Recommended: Raspberry Pi + Cloudflare Tunnel for remote access.
-- Python 3.12+, Node.js 18+
+- MitID login must happen from a **residential IP**
+- Aula/STIL blocks datacenter IPs for authentication
+- Tokens renew silently in normal use
+- MitID re-authentication is usually only needed when the refresh token expires
 
-## Local Development
+## Multi-user support
+
+Each family member has their own configuration:
+
+- `APP_USER_N_NAME`
+- `APP_USER_N_PASSWORD`
+- `APP_USER_N_TOKEN_PATH`
+- `APP_USER_N_PUSH_STORE_PATH`
+
+Each user therefore has:
+
+- a separate app password
+- a separate MitID identity
+- a separate Aula token store
+- a separate push subscription store
+
+## Local development
+
+### Requirements
+
+- Python with `venv`
+- Node.js and npm
+
+### Backend
 
 ```bash
-# Backend
 cd backend
-python -m venv venv && source venv/bin/activate  # or venv\\Scripts\\activate on Windows
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-cp .env.example .env  # edit with your settings
-uvicorn app.main:app --reload
+```
 
-# Frontend
+Create `backend/.env`, then start the API:
+
+```bash
+cd backend
+.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload --port 8000
+```
+
+### Frontend
+
+```bash
 cd frontend
 npm install
-cp .env.local.example .env.local
+```
+
+Create `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+Start the frontend:
+
+```bash
+cd frontend
 npm run dev
 ```
 
-Visit `http://localhost:3000` and log in with MitID.
+Open `http://localhost:3000`.
 
-## Deployment (Raspberry Pi + Cloudflare Tunnel)
+### Local frontend against the Webdock backend
 
-> **Why not cloud hosting?** Aula/STIL actively blocks datacenter IPs at the network level.
-> Both the API and token refresh endpoints return 403 from any cloud provider.
-> This is the same reason the original integration only works on Home Assistant (which runs locally).
+If you want to run the frontend locally while using the backend on the VPS, open an SSH tunnel:
 
-**TODO:** Docker Compose + Cloudflare Tunnel setup instructions.
+```bash
+ssh -L 8000:localhost:8000 admin@193.181.210.163
+```
 
-## Known Limitations
+Then use:
 
-- MitID login requires residential IP (home network)
-- Guardian login only (child login not supported)
-- "Registrér ankomst" (check-in) API not yet discovered for parent role
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-## Credits
+This is useful when the backend on Webdock already has working Aula tokens.
 
-- Original Aula integration: [scaarup/aula](https://github.com/scaarup/aula)
-- MitID login flow reverse-engineered from the original HA component
+## Push notifications
+
+- Uses VAPID-based web push
+- Stores subscriptions per user
+- Polls for updates every 5 minutes in the background
+- Works well with the installed PWA on mobile devices
+
+## Operations
+
+- If the app shows **Login påkrævet**, start a fresh MitID login in the app
+- To reset one user's Aula tokens, remove that user's token file under `/opt/aula-jkf/data/`
+- To change an app password, edit `/opt/aula-jkf/backend.env` and recreate the backend container
+- `docker restart` does **not** re-read `backend.env`
+
+See `DEPLOYMENT.md` for deployment and operational details.
+
+## Roadmap
+
+Planned, but not implemented yet:
+
+- Calendar view
+- Galleries
+- Compose/send messages
