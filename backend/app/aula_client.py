@@ -298,6 +298,7 @@ class AulaClient:
 
     def mark_thread_read(self, thread_id: int) -> bool:
         """Mark a thread as read."""
+        self._ensure_valid_token()
         csrf_token = self._get_csrf_token()
         headers = {"content-type": "application/json"}
         if csrf_token:
@@ -310,7 +311,7 @@ class AulaClient:
             headers=headers,
             verify=True,
         )
-        _LOGGER.info(f"markThreadAsRead response: {res.status_code} {res.text[:300]}")
+        _LOGGER.warning(f"markThreadAsRead response: {res.status_code} {res.text[:300]}")
         if res.status_code == 200:
             data = res.json()
             return data.get("status", {}).get("message") == "OK"
