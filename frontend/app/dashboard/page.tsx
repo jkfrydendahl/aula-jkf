@@ -175,13 +175,13 @@ export default function DashboardPage() {
     const newRead = !msg.is_read;
     setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: newRead } : m)));
     try {
-      if (newRead) {
-        await api.markRead(msg.id);
-      } else {
-        await api.markUnread(msg.id);
+      const result = newRead ? await api.markRead(msg.id) : await api.markUnread(msg.id);
+      if (!result.success) {
+        setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: !newRead } : m)));
+        showToast("Kunne ikke opdatere besked", "error");
       }
     } catch {
-      // Revert on failure
+      // Revert on network/server error
       setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: !newRead } : m)));
       showToast("Kunne ikke opdatere besked", "error");
     }

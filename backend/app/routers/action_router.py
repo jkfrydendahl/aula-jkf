@@ -74,6 +74,7 @@ def create_action_router() -> APIRouter:
         child_id: str,
         aula_service: AulaService = Depends(get_aula_service),
     ):
+        aula_service.ensure_data_loaded()
         return aula_service.get_pickup_responsibles(child_id)
 
     @router.get("/presence/{child_id}/go-home-with-list")
@@ -81,6 +82,7 @@ def create_action_router() -> APIRouter:
         child_id: str,
         aula_service: AulaService = Depends(get_aula_service),
     ):
+        aula_service.ensure_data_loaded()
         return aula_service.get_go_home_with_list(child_id)
 
     @router.post("/presence/update-template")
@@ -88,6 +90,7 @@ def create_action_router() -> APIRouter:
         request: UpdatePresenceTemplateRequest,
         aula_service: AulaService = Depends(get_aula_service),
     ):
+        aula_service.ensure_data_loaded()
         return aula_service.update_presence_template(
             child_id=request.child_id,
             date=request.date,

@@ -61,20 +61,24 @@ def create_app(
         return _on_tokens_updated
 
     def make_renew_fn(aula_client: AulaClient) -> Callable[[str], TokenData]:
+        import threading
+        _refresh_lock = threading.Lock()
+
         def renew_token(refresh_token: str) -> TokenData:
-            """Renew the access token using the Aula login client."""
-            login_client = aula_client._aula_client
-            login_client.tokens = {"refresh_token": refresh_token}
-            success = login_client.renew_access_token()
-            if not success:
-                raise Exception("Token renewal failed")
-            tokens = login_client.tokens
-            expires_at = time.time() + tokens.get("expires_in", 3600)
-            return TokenData(
-                access_token=tokens["access_token"],
-                refresh_token=tokens["refresh_token"],
-                expires_at=expires_at,
-            )
+            """Renew the access token using the Aula login client (serialized per user)."""
+            with _refresh_lock:
+                login_client = aula_client._aula_client
+                login_client.tokens = {"refresh_token": refresh_token}
+                success = login_client.renew_access_token()
+                if not success:
+                    raise Exception("Token renewal failed")
+                tokens = login_client.tokens
+                expires_at = time.time() + tokens.get("expires_in", 3600)
+                return TokenData(
+                    access_token=tokens["access_token"],
+                    refresh_token=tokens["refresh_token"],
+                    expires_at=expires_at,
+                )
 
         return renew_token
 

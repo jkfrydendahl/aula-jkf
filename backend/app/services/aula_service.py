@@ -3,7 +3,7 @@ from typing import Any, Optional
 import logging
 import time
 
-from app.aula_client import AulaClient, AulaClientError, AulaAuthRequiredError
+from app.aula_client import AulaClient, AulaClientError, AulaAuthRequiredError, REQUEST_TIMEOUT
 from app.repositories.token_repository import TokenRepository
 
 _LOGGER = logging.getLogger(__name__)
@@ -377,7 +377,8 @@ class AulaService:
                 "status": status,
             }),
         )
-        return {"success": True, "data": result}
+        success = (result.get("status") or {}).get("message") == "OK"
+        return {"success": success, "data": result}
 
     def update_sick_status(self, child_id: str, is_sick: bool) -> dict[str, Any]:
         """Mark child as sick or not sick."""
@@ -397,6 +398,7 @@ class AulaService:
             json=payload,
             headers=headers,
             verify=True,
+            timeout=REQUEST_TIMEOUT,
         )
         data = res.json()
         success = data.get("status", {}).get("message") == "OK"

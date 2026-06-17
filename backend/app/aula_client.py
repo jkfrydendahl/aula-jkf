@@ -416,10 +416,10 @@ class AulaClient:
         headers = {"content-type": "application/json"}
         if csrf_token:
             headers["csrfp-token"] = csrf_token
-        _LOGGER.debug("custom_api_call: Making API call to " + self.apiurl + uri)
+        _LOGGER.debug("custom_api_call: Making API call to " + self.apiurl + "?method=" + uri)
         if post_data == 0:
             response = self._session.get(
-                self.apiurl + uri + self._get_access_token_param(),
+                self.apiurl + "?method=" + uri + self._get_access_token_param(),
                 headers=headers,
                 verify=True,
                timeout=REQUEST_TIMEOUT,
@@ -435,7 +435,7 @@ class AulaClient:
                     payload = post_data
             _LOGGER.debug("custom_api_call: post_data:" + str(post_data))
             response = self._session.post(
-                self.apiurl + uri + self._get_access_token_param(),
+                self.apiurl + "?method=" + uri + self._get_access_token_param(),
                 headers=headers,
                 json=payload,
                 verify=True,
