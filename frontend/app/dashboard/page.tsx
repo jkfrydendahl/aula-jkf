@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import DOMPurify from "dompurify";
 import { api, Child, Presence, PickupResponsible, GoHomeWithChild, Message, ThreadDetail, Post, VacationRegistration } from "@/lib/api";
 
 // Toast notification type
@@ -170,6 +171,21 @@ export default function DashboardPage() {
     }
   }
 
+  async function toggleReadStatus(msg: Message) {
+    const newRead = !msg.is_read;
+    setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: newRead } : m)));
+    try {
+      if (newRead) {
+        await api.markRead(msg.id);
+      } else {
+        await api.markUnread(msg.id);
+      }
+    } catch {
+      // Revert on failure
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: !newRead } : m)));
+      showToast("Kunne ikke opdatere besked", "error");
+    }
+  }
 
   async function openVacation(vac: VacationRegistration) {
     setSelectedVacation(vac);
@@ -693,7 +709,7 @@ export default function DashboardPage() {
                       </div>
                       <div
                         className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: m.text }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(m.text) }}
                       />
                       {m.attachments && m.attachments.length > 0 && (
                         <div className="mt-3 space-y-1">
@@ -752,13 +768,17 @@ export default function DashboardPage() {
                         </p>
                       )}
                     </div>
-                    <div className="flex flex-col items-end ml-4 gap-1">
+                      <div className="flex flex-col items-end ml-4 gap-1">
                       <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                         {msg.timestamp ? new Date(msg.timestamp).toLocaleDateString("da-DK") : ""}
                       </time>
-                      <span className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full ${msg.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium"}`}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleReadStatus(msg); }}
+                        className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full transition ${msg.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 hover:text-yellow-700 dark:hover:text-yellow-300" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-500 dark:hover:text-gray-400"}`}
+                        title={msg.is_read ? "Markér som ulæst" : "Markér som læst"}
+                      >
                         {msg.is_read ? "Læst" : "Ulæst"}
-                      </span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -799,7 +819,7 @@ export default function DashboardPage() {
                 </div>
                 <div
                   className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none"
-                  dangerouslySetInnerHTML={{ __html: selectedPost.content }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedPost.content) }}
                 />
                 {selectedPost.attachments.length > 0 && (
                   <div className="mt-4 space-y-1">

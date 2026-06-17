@@ -234,6 +234,7 @@ export const api = {
   getMessages: () => request<Message[]>("/messages"),
   getThread: (threadId: string) => request<ThreadDetail>(`/messages/${threadId}`),
   markRead: (threadId: string) => request<{ success: boolean }>(`/messages/${threadId}/read`, { method: "POST" }),
+  markUnread: (threadId: string) => request<{ success: boolean }>(`/messages/${threadId}/unread`, { method: "POST" }),
   getPosts: () => request<Post[]>("/posts"),
   getVacationRegistrations: () => request<VacationRegistration[]>("/vacation-registrations"),
   getVacationResponse: (responseId: number) => request<{ days: { date: string; isComing: boolean }[] }>(`/vacation-registrations/${responseId}`),

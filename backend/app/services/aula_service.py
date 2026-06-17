@@ -328,6 +328,12 @@ class AulaService:
         subscription_id = self._subscription_id_cache.get(str(thread_id), thread_id)
         return self._client.mark_thread_read(thread_id, subscription_id=subscription_id)
 
+    def mark_thread_unread(self, thread_id: int) -> bool:
+        """Mark a thread as unread."""
+        self._ensure_tokens_loaded()
+        subscription_id = self._subscription_id_cache.get(str(thread_id), thread_id)
+        return self._client.mark_thread_unread(thread_id, subscription_id=subscription_id)
+
     def get_calendar(self, child_id: str) -> list[dict[str, Any]]:
         """Return calendar events for a child."""
         events = []
@@ -358,7 +364,8 @@ class AulaService:
                 "recipients": [{"id": int(recipient_id)}],
             },
         )
-        return {"success": True, "data": result}
+        success = (result.get("status") or {}).get("message") == "OK"
+        return {"success": success, "data": result}
 
     def update_presence(self, child_id: str, status: str) -> dict[str, Any]:
         """Update child presence status (check-in via updateDailyOverview)."""

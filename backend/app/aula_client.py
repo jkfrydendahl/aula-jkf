@@ -309,13 +309,20 @@ class AulaClient:
 
     def mark_thread_read(self, thread_id: int, subscription_id: int | None = None) -> bool:
         """Mark a thread as read via messaging.updateSubscriptionStatus."""
+        return self._update_subscription_status(thread_id, subscription_id, "Read")
+
+    def mark_thread_unread(self, thread_id: int, subscription_id: int | None = None) -> bool:
+        """Mark a thread as unread via messaging.updateSubscriptionStatus."""
+        return self._update_subscription_status(thread_id, subscription_id, "Unread")
+
+    def _update_subscription_status(self, thread_id: int, subscription_id: int | None, status: str) -> bool:
         self._ensure_valid_token()
         csrf_token = self._get_csrf_token()
         headers = {"content-type": "application/json"}
         if csrf_token:
             headers["csrfp-token"] = csrf_token
         sid = subscription_id if subscription_id is not None else thread_id
-        payload = {"subscriptionIds": [sid], "status": "Read"}
+        payload = {"subscriptionIds": [sid], "status": status}
         res = self._session.post(
             self.apiurl
             + "?method=messaging.updateSubscriptionStatus"
@@ -323,9 +330,9 @@ class AulaClient:
             json=payload,
             headers=headers,
             verify=True,
-        timeout=REQUEST_TIMEOUT,
+            timeout=REQUEST_TIMEOUT,
         )
-        _LOGGER.debug(f"updateSubscriptionStatus [{sid}]: {res.status_code}")
+        _LOGGER.debug(f"updateSubscriptionStatus [{sid}] → {status}: {res.status_code}")
         if res.status_code == 200:
             data = res.json()
             return (data.get("status") or {}).get("message") == "OK"
@@ -1336,7 +1343,7 @@ class AulaClient:
                         data = json.loads(mock_meebook, strict=False)
                     else:
                         response = requests.get(
-                            MEEBOOK_API + get_payload, headers=headers, verify=True
+                            MEEBOOK_API + get_payload, headers=headers, verify=True, timeout=REQUEST_TIMEOUT
                         )
                         data = json.loads(response.text, strict=False)
                         # _LOGGER.debug("Meebook ugeplan raw response from week "+week+": "+str(response.text))

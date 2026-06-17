@@ -168,7 +168,7 @@ def create_app(
         content = (
             {"detail": "Authentication required", "re_auth_required": True}
             if isinstance(exc, AulaAuthRequiredError)
-            else {"detail": str(exc)}
+            else {"detail": "Internal server error"}
         )
 
         response = JSONResponse(status_code=status, content=content)

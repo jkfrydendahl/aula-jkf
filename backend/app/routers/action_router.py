@@ -40,6 +40,7 @@ def create_action_router() -> APIRouter:
         request: SendMessageRequest,
         aula_service: AulaService = Depends(get_aula_service),
     ):
+        aula_service.ensure_data_loaded()
         return aula_service.send_message(
             recipient_id=request.recipient_id,
             subject=request.subject,
@@ -51,6 +52,7 @@ def create_action_router() -> APIRouter:
         request: UpdatePresenceRequest,
         aula_service: AulaService = Depends(get_aula_service),
     ):
+        aula_service.ensure_data_loaded()
         return aula_service.update_presence(
             child_id=request.child_id,
             status=request.status,
@@ -61,6 +63,7 @@ def create_action_router() -> APIRouter:
         request: UpdateSickRequest,
         aula_service: AulaService = Depends(get_aula_service),
     ):
+        aula_service.ensure_data_loaded()
         return aula_service.update_sick_status(
             child_id=request.child_id,
             is_sick=request.is_sick,

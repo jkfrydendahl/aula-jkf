@@ -41,6 +41,16 @@ def create_data_router() -> APIRouter:
             _LOGGER.warning(f"Failed to mark thread {thread_id} as read: {e}")
             return {"success": False}
 
+    @router.post("/messages/{thread_id}/unread")
+    def mark_unread(thread_id: int, aula_service: AulaService = Depends(get_aula_service)):
+        try:
+            aula_service.ensure_data_loaded()
+            success = aula_service.mark_thread_unread(thread_id)
+            return {"success": success}
+        except Exception as e:
+            _LOGGER.warning(f"Failed to mark thread {thread_id} as unread: {e}")
+            return {"success": False}
+
     @router.get("/calendar/{child_id}")
     def get_calendar(child_id: str, aula_service: AulaService = Depends(get_aula_service)):
         aula_service.ensure_data_loaded()
