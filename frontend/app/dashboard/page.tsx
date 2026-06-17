@@ -410,7 +410,7 @@ export default function DashboardPage() {
             onClick={logoutAppAuth}
             className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline underline-offset-2"
           >
-            Log ud
+            LOG UD
           </button>
         </div>
       </header>
