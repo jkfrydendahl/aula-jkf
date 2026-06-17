@@ -49,6 +49,20 @@ export default function DashboardPage() {
     }, 4000);
   }
 
+  async function fetchPresenceMap(childrenData: Child[]) {
+    const presenceResults = await Promise.all(
+      childrenData.map((child) => api.getPresence(child.id).catch(() => null))
+    );
+    const presenceMap: Record<string, Presence> = {};
+    childrenData.forEach((child, index) => {
+      const result = presenceResults[index];
+      if (result) {
+        presenceMap[child.id] = result;
+      }
+    });
+    return presenceMap;
+  }
+
   useEffect(() => {
     loadData();
   }, []);
@@ -65,11 +79,7 @@ export default function DashboardPage() {
       presenceInterval = setInterval(async () => {
         if (document.hidden) return;
         try {
-          const presenceMap: Record<string, Presence> = {};
-          for (const child of children) {
-            presenceMap[child.id] = await api.getPresence(child.id);
-          }
-          setPresence(presenceMap);
+          setPresence(await fetchPresenceMap(children));
         } catch { /* silent refresh failure */ }
       }, 60000);
 
@@ -91,11 +101,7 @@ export default function DashboardPage() {
       if (!document.hidden) {
         (async () => {
           try {
-            const presenceMap: Record<string, Presence> = {};
-            for (const child of children) {
-              presenceMap[child.id] = await api.getPresence(child.id);
-            }
-            setPresence(presenceMap);
+            setPresence(await fetchPresenceMap(children));
           } catch { /* ignore */ }
         })();
       }
@@ -138,15 +144,7 @@ export default function DashboardPage() {
       setPosts(postsData);
       setVacations(vacationsData);
 
-      const presenceMap: Record<string, Presence> = {};
-      for (const child of childrenData) {
-        try {
-          presenceMap[child.id] = await api.getPresence(child.id);
-        } catch {
-          // Skip if presence unavailable
-        }
-      }
-      setPresence(presenceMap);
+      setPresence(await fetchPresenceMap(childrenData));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {

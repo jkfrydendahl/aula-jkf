@@ -14,13 +14,14 @@ class BackgroundPoller:
     def tick(self):
         """Run one poll cycle. Called by scheduler."""
         try:
+            self._aula_service.refresh_messages()
             current_count = self._aula_service.get_unread_count()
 
             if current_count > self._previous_unread_count:
                 new_count = current_count - self._previous_unread_count
                 self._push_service.send_notification(
-                    title=f"New Aula message{'s' if new_count > 1 else ''}",
-                    body=f"You have {new_count} new unread message{'s' if new_count > 1 else ''}",
+                    title="Ny besked i Aula" if new_count == 1 else f"{new_count} nye beskeder i Aula",
+                    body="Tryk for at åbne",
                 )
 
             self._previous_unread_count = current_count

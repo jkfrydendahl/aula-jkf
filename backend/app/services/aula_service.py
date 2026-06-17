@@ -8,9 +8,6 @@ from app.repositories.token_repository import TokenRepository
 
 _LOGGER = logging.getLogger(__name__)
 
-# Thread cache: {thread_id: (data, timestamp)}
-_thread_cache: dict[int, tuple[dict, float]] = {}
-_subscription_id_cache: dict[str, int] = {}
 _THREAD_CACHE_TTL = 300  # 5 minutes
 
 
@@ -23,6 +20,8 @@ class AulaService:
         self._client = client
         self._token_repo = token_repository
         self._load_lock = threading.Lock()
+        self._thread_cache: dict[int, tuple[dict, float]] = {}
+        self._subscription_id_cache: dict[str, int] = {}
 
     def _ensure_tokens_loaded(self):
         """Reload tokens from repository into client if missing or stale."""
@@ -168,7 +167,7 @@ class AulaService:
             subscription_id = thread.get("subscriptionId") or thread.get("id")
             # Cache subscription ID for use in mark-as-read
             if thread_id:
-                _subscription_id_cache[thread_id] = subscription_id
+                self._subscription_id_cache[thread_id] = subscription_id
             messages.append({
                 "id": thread_id,
                 "subject": thread.get("subject", "(ingen emne)"),
@@ -280,7 +279,7 @@ class AulaService:
     def get_thread_detail(self, thread_id: int) -> dict[str, Any]:
         """Return full messages for a specific thread (cached for 5 min)."""
         # Check cache first
-        cached = _thread_cache.get(thread_id)
+        cached = self._thread_cache.get(thread_id)
         if cached and (time.time() - cached[1]) < _THREAD_CACHE_TTL:
             return cached[0]
 
@@ -320,13 +319,13 @@ class AulaService:
             "subject": data.get("subject", ""),
             "messages": messages,
         }
-        _thread_cache[thread_id] = (result, time.time())
+        self._thread_cache[thread_id] = (result, time.time())
         return result
 
     def mark_thread_read(self, thread_id: int) -> bool:
         """Mark a thread as read using subscription ID."""
         self._ensure_tokens_loaded()
-        subscription_id = _subscription_id_cache.get(str(thread_id), thread_id)
+        subscription_id = self._subscription_id_cache.get(str(thread_id), thread_id)
         return self._client.mark_thread_read(thread_id, subscription_id=subscription_id)
 
     def get_calendar(self, child_id: str) -> list[dict[str, Any]]:
@@ -494,3 +493,16 @@ class AulaService:
         """Return number of unread messages."""
         return self._client.unread_messages
 
+    def refresh_messages(self) -> None:
+        """Fetch fresh message threads from Aula and update unread count."""
+        try:
+            self._ensure_tokens_loaded()
+            if not self._client._children:
+                return
+            threads = self._client.get_message_threads(page=0)
+            self._client._threads = threads
+            self._client.unread_messages = sum(
+                1 for thread in threads if not thread.get("read", True)
+            )
+        except Exception as e:
+            _LOGGER.warning(f"refresh_messages failed: {e}")

@@ -55,7 +55,7 @@ export interface AuthStartResponse {
 }
 
 export interface AuthStatusResponse {
-  status: "pending" | "awaiting_identity" | "complete" | "error";
+  status: "pending" | "qr_ready" | "identity_selection" | "complete" | "error";
   message?: string;
   qr_data?: string;
   qr_data_2?: string;
@@ -192,10 +192,10 @@ export const api = {
   authStatus: (flowId: string) =>
     request<AuthStatusResponse>(`/auth/status/${flowId}`),
 
-  authSelectIdentity: (flowId: string, identity: number) =>
+  authSelectIdentity: (flowId: string, identityIndex: number) =>
     request<void>(`/auth/select-identity/${flowId}`, {
       method: "POST",
-      body: JSON.stringify({ identity }),
+      body: JSON.stringify({ identity_index: identityIndex }),
     }),
 
   authCheck: () =>

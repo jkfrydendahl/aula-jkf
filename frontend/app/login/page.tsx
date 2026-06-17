@@ -112,7 +112,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {status?.status === "awaiting_identity" && status.identities && (
+        {status?.status === "identity_selection" && status.identities && (
           <div className="space-y-4">
             <p className="text-gray-700 dark:text-gray-300 font-medium">Vælg identitet:</p>
             {status.identities.map((name, idx) => (

@@ -15,6 +15,7 @@ MIN_UDDANNELSE_API = "https://api.minuddannelse.net/aula"
 MEEBOOK_API = "https://app.meebook.com/aulaapi"
 SYSTEMATIC_API = "https://systematic-momo.dk/api/aula"
 EASYIQ_API = "https://api.easyiqcloud.dk/api/aula"
+REQUEST_TIMEOUT = (10, 30)
 
 
 class AulaClientError(Exception):
@@ -28,15 +29,6 @@ class AulaAuthRequiredError(AulaClientError):
 
 
 class AulaClient:
-    huskeliste = {}
-    presence = {}
-    ugep_attr = {}
-    ugepnext_attr = {}
-    mu_opgaver_attr = {}
-    mu_opgaver_next_attr = {}
-    widgets = {}
-    tokens = {}
-
     def __init__(
         self,
         mitid_username,
@@ -116,8 +108,16 @@ class AulaClient:
         self._threads = []
         self._skoleskema = {}
         self.ugeplaner = {}
+        self.huskeliste = {}
         self.presence = {}
-
+        self.ugep_attr = {}
+        self.ugepnext_attr = {}
+        self.mu_opgaver_attr = {}
+        self.mu_opgaver_next_attr = {}
+        self.widgets = {}
+        self.tokens = {}
+
+
     def _persist_tokens(self):
         """Persist tokens via the callback if set."""
         if self._on_tokens_updated and self._tokens:
@@ -136,6 +136,7 @@ class AulaClient:
             + str(page)
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         data = res.json()
         threads = (data.get("data") or {}).get("threads", [])
@@ -157,6 +158,7 @@ class AulaClient:
             + f"?method=posts.getAllPosts&parent=profile&index={index}&{ids_params}&limit={limit}"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         data = res.json().get("data", {})
         if not isinstance(data, dict):
@@ -174,6 +176,7 @@ class AulaClient:
             + f"?method=presence.getVacationRegistrationsByChildren&{child_ids_params}"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         return res.json().get("data", [])
 
@@ -184,6 +187,7 @@ class AulaClient:
             + f"?method=presence.getVacationRegistrationResponse&vacationRegistrationResponseId={response_id}"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         return res.json().get("data", {})
 
@@ -206,6 +210,7 @@ class AulaClient:
             json=payload,
             headers=headers,
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         result = res.json()
         _LOGGER.info(f"Vacation submit response: {result}")
@@ -219,6 +224,7 @@ class AulaClient:
             + f"?method=presence.getPickupResponsibles&uniStudentIds[]={institution_profile_id}"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         return res.json().get("data", [])
 
@@ -230,6 +236,7 @@ class AulaClient:
             + f"?method=presence.getGoHomeWithList&institutionProfileId={institution_profile_id}"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         return res.json().get("data", [])
 
@@ -242,6 +249,7 @@ class AulaClient:
             + f"?method=presence.getPresenceStates&{ids_params}"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         return res.json().get("data", [])
 
@@ -253,6 +261,7 @@ class AulaClient:
             + f"?method=presence.getDailyOverview&childIds[]={child_id}"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         data = res.json().get("data", [])
         if data and len(data) > 0:
@@ -280,6 +289,7 @@ class AulaClient:
             json=payload,
             headers=headers,
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         return res.json()
 
@@ -293,6 +303,7 @@ class AulaClient:
             + str(page)
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         return res.json().get("data", {})
 
@@ -312,6 +323,7 @@ class AulaClient:
             json=payload,
             headers=headers,
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         _LOGGER.debug(f"updateSubscriptionStatus [{sid}]: {res.status_code}")
         if res.status_code == 200:
@@ -329,6 +341,69 @@ class AulaClient:
         cookies = self._session.cookies.get_dict()
         return cookies.get("Csrfp-Token")
 
+    def _parse_calendar_events_by_child(self, raw_data):
+        child_ids = {str(child["id"]) for child in self._children}
+        parsed = {child_id: [] for child_id in child_ids}
+        events = raw_data.get("events", raw_data) if isinstance(raw_data, dict) else raw_data
+        if not isinstance(events, list):
+            return parsed
+
+        list_keys = (
+            "instProfileIds",
+            "institutionProfileIds",
+            "profileIds",
+            "calendarProfileIds",
+            "resourceIds",
+        )
+        scalar_keys = (
+            "instProfileId",
+            "institutionProfileId",
+            "profileId",
+            "calendarProfileId",
+            "resourceId",
+        )
+
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+
+            related_child_ids = set()
+            for key in list_keys:
+                values = event.get(key)
+                if isinstance(values, list):
+                    related_child_ids.update(
+                        str(value) for value in values if str(value) in child_ids
+                    )
+            for key in scalar_keys:
+                value = event.get(key)
+                if value is not None and str(value) in child_ids:
+                    related_child_ids.add(str(value))
+
+            if not related_child_ids and len(child_ids) == 1:
+                related_child_ids = set(child_ids)
+
+            for child_id in related_child_ids:
+                parsed.setdefault(child_id, []).append(event)
+
+        return parsed
+
+    def _build_ugeplan_cache(self):
+        self.ugeplaner = {}
+        for child in self._children:
+            child_id = str(child["id"])
+            first_name = child["name"].split()[0]
+            current_week = self.ugep_attr.get(first_name)
+            next_week = self.ugepnext_attr.get(first_name)
+            current_assignments = self.mu_opgaver_attr.get(first_name)
+            next_assignments = self.mu_opgaver_next_attr.get(first_name)
+            if any([current_week, next_week, current_assignments, next_assignments]):
+                self.ugeplaner[child_id] = {
+                    "current_week": current_week or "",
+                    "next_week": next_week or "",
+                    "mu_opgaver_current_week": current_assignments or "",
+                    "mu_opgaver_next_week": next_assignments or "",
+                }
+
     def custom_api_call(self, uri, post_data):
         csrf_token = self._get_csrf_token()
         headers = {"content-type": "application/json"}
@@ -340,21 +415,25 @@ class AulaClient:
                 self.apiurl + uri + self._get_access_token_param(),
                 headers=headers,
                 verify=True,
+               timeout=REQUEST_TIMEOUT,
+
             )
         else:
-            try:
-                # Check if post_data is valid JSON
-                json.loads(post_data)
-            except json.JSONDecodeError as e:
-                _LOGGER.error("Invalid json supplied as post_data")
-                error_msg = {"result": "Fail - invalid json supplied as post_data"}
-                return error_msg
-            _LOGGER.debug("custom_api_call: post_data:" + post_data)
+            if isinstance(post_data, dict):
+                payload = post_data
+            else:
+                try:
+                    payload = json.loads(post_data)
+                except (json.JSONDecodeError, TypeError):
+                    payload = post_data
+            _LOGGER.debug("custom_api_call: post_data:" + str(post_data))
             response = self._session.post(
                 self.apiurl + uri + self._get_access_token_param(),
                 headers=headers,
-                json=json.loads(post_data),
+                json=payload,
                 verify=True,
+               timeout=REQUEST_TIMEOUT,
+
             )
         _LOGGER.debug(response.text)
         try:
@@ -460,6 +539,7 @@ class AulaClient:
                     + "?method=profiles.getProfilesByLogin"
                     + self._get_access_token_param(),
                     verify=True,
+                timeout=REQUEST_TIMEOUT,
                 )
 
                 if ver.status_code == 410:
@@ -500,6 +580,7 @@ class AulaClient:
             + "?method=profiles.getProfileContext&portalrole=guardian"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         ).json()
         profile_context_data = profile_context_response.get("data") if profile_context_response else None
         if not profile_context_data:
@@ -523,6 +604,7 @@ class AulaClient:
             + "?method=profiles.getProfileContext"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         ).json()
         widgets_data = widgets_response.get("data") if widgets_response else None
         if not widgets_data:
@@ -552,6 +634,7 @@ class AulaClient:
             + widgetid
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         ).json()
         self._bearertoken = token_response.get("data") if token_response else None
         if not self._bearertoken:
@@ -659,6 +742,7 @@ class AulaClient:
                 + "?method=profiles.getProfilesByLogin"
                 + self._get_access_token_param(),
                 verify=True,
+            timeout=REQUEST_TIMEOUT,
             ).json()
             is_logged_in = (
                 response is not None
@@ -677,6 +761,14 @@ class AulaClient:
         self._children = []
         self._institutionProfiles = []
         self._childrenFirstNamesAndUserIDs = {}
+        self._skoleskema = {}
+        self.ugeplaner = {}
+        self.huskeliste = {}
+        self.presence = {}
+        self.ugep_attr = {}
+        self.ugepnext_attr = {}
+        self.mu_opgaver_attr = {}
+        self.mu_opgaver_next_attr = {}
         for profile in self._profiles:
             for child in profile["children"]:
                 self._childnames[child["id"]] = child["name"]
@@ -709,6 +801,7 @@ class AulaClient:
                 + str(child["id"])
                 + self._get_access_token_param(),
                 verify=True,
+            timeout=REQUEST_TIMEOUT,
             ).json()
             response_data = response.get("data") if response else None
             if response_data and len(response_data) > 0:
@@ -729,22 +822,17 @@ class AulaClient:
             + "?method=messaging.getThreads&sortOn=date&orderDirection=desc&page=0"
             + self._get_access_token_param(),
             verify=True,
+        timeout=REQUEST_TIMEOUT,
         )
         # _LOGGER.debug("mesres "+str(mesres.text))
         self.unread_messages = 0
-        unread = 0
         self.message = {}
         mesres_json = mesres.json()
         threads = mesres_json.get("data", {}).get("threads") if mesres_json else None
-        for mes in threads or []:
-            if not mes["read"]:
-                # self.unread_messages = 1
-#                print("unread mes "+str(mes))
-                unread = 1
-                threadid = mes["id"]
-                break
-        # if self.unread_messages == 1:
-        if unread == 1:
+        unread_threads = [mes for mes in threads or [] if not mes.get("read")]
+        self.unread_messages = len(unread_threads)
+        if unread_threads:
+            threadid = unread_threads[0]["id"]
             # _LOGGER.debug("tid "+str(threadid))
             threadres = self._session.get(
                 self.apiurl
@@ -753,6 +841,7 @@ class AulaClient:
                 + "&page=0"
                 + self._get_access_token_param(),
                 verify=True,
+            timeout=REQUEST_TIMEOUT,
             )
             # _LOGGER.debug("threadres "+str(threadres.text))
             threadres_json = threadres.json()
@@ -762,7 +851,6 @@ class AulaClient:
                 )
                 self.message["sender"] = "Ukendt afsender"
                 self.message["subject"] = "Følsom besked"
-                self.unread_messages = 1
             elif threadres_json.get("data") and threadres_json["data"].get("messages"):
                 for message in threadres_json["data"]["messages"]:
                     if message["messageType"] == "Message":
@@ -786,7 +874,6 @@ class AulaClient:
                             )
                         except:
                             self.message["subject"] = ""
-                        self.unread_messages = 1
                         break
 
         # Calendar:
@@ -821,11 +908,14 @@ class AulaClient:
                 data=post_data,
                 headers=headers,
                 verify=True,
+               timeout=REQUEST_TIMEOUT,
+
             )
             try:
-                with open("skoleskema.json", "w") as skoleskema_json:
-                    json.dump(res.text, skoleskema_json)
-            except:
+                response_json = res.json()
+                calendar_data = response_json.get("data", []) if response_json else []
+                self._skoleskema = self._parse_calendar_events_by_child(calendar_data)
+            except Exception:
                 _LOGGER.warning(
                     "Got the following reply when trying to fetch calendars: "
                     + str(res.text)
@@ -839,6 +929,7 @@ class AulaClient:
                     + "?method=profiles.getProfileContext&portalrole=guardian"
                     + self._get_access_token_param(),
                     verify=True,
+                timeout=REQUEST_TIMEOUT,
                 ).json()["data"]["userId"]
             except Exception as e:
                 _LOGGER.warning(
@@ -871,6 +962,7 @@ class AulaClient:
                         MIN_UDDANNELSE_API + get_payload,
                         headers={"Authorization": token, "accept": "application/json"},
                         verify=True,
+                    timeout=REQUEST_TIMEOUT,
                     )
                     _LOGGER.debug(
                         "MU Opgaver status_code " + str(mu_opgaver.status_code)
@@ -909,6 +1001,7 @@ class AulaClient:
             nextweek = now.strftime("%Y-W%V")
             mu_opgaver(thisweek, "this")
             mu_opgaver(nextweek, "next")
+            self._build_ugeplan_cache()
         # End of MU Opgaver
 
         # Ugeplaner:
@@ -918,6 +1011,7 @@ class AulaClient:
                 + "?method=profiles.getProfileContext&portalrole=guardian"
                 + self._get_access_token_param(),
                 verify=True,
+            timeout=REQUEST_TIMEOUT,
             ).json()
             guardian_data = guardian_response.get("data") if guardian_response else None
             if not guardian_data or "userId" not in guardian_data:
@@ -958,6 +1052,7 @@ class AulaClient:
                         MIN_UDDANNELSE_API + get_payload,
                         headers={"Authorization": token, "accept": "application/json"},
                         verify=True,
+                    timeout=REQUEST_TIMEOUT,
                     )
                     # _LOGGER.debug("ugeplaner status_code "+str(ugeplaner.status_code))
                     # _LOGGER.debug("ugeplaner response "+str(ugeplaner.text))
@@ -1010,6 +1105,7 @@ class AulaClient:
                             json=post_data,
                             headers=easyiq_headers,
                             verify=True,
+                        timeout=REQUEST_TIMEOUT,
                         )
                         # _LOGGER.debug(
                         #    "EasyIQ Opgaver status_code " + str(ugeplaner.status_code)
@@ -1155,6 +1251,7 @@ class AulaClient:
                             SYSTEMATIC_API + get_payload,
                             headers=huskelisten_headers,
                             verify=True,
+                        timeout=REQUEST_TIMEOUT,
                         )
                         try:
                             data = json.loads(response.text, strict=False)
@@ -1295,6 +1392,7 @@ class AulaClient:
             nextweek = now.strftime("%Y-W%V")
             ugeplan(thisweek, "this")
             ugeplan(nextweek, "next")
+            self._build_ugeplan_cache()
             # _LOGGER.debug("End result of ugeplan object: "+str(self.ugep_attr))
         # End of Ugeplaner
         return True
