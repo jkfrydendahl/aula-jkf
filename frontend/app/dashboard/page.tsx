@@ -754,6 +754,9 @@ export default function DashboardPage() {
                       <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                         {msg.timestamp ? new Date(msg.timestamp).toLocaleDateString("da-DK") : ""}
                       </time>
+                      <span className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full ${msg.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium"}`}>
+                        {msg.is_read ? "Læst" : "Ulæst"}
+                      </span>
                     </div>
                   </div>
                 </div>

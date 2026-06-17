@@ -286,7 +286,7 @@ class AulaService:
             return {"messages": []}
 
         messages = []
-        for msg in data.get("messages", []):
+        for msg in (data.get("messages") or []):
             if msg.get("messageType") == "Message":
                 text = ""
                 if isinstance(msg.get("text"), dict):
@@ -295,8 +295,8 @@ class AulaService:
                     text = str(msg["text"])
 
                 attachments = []
-                for att in msg.get("attachments", []):
-                    file_info = att.get("file", {})
+                for att in (msg.get("attachments") or []):
+                    file_info = att.get("file") or {}
                     attachments.append({
                         "id": att.get("id"),
                         "name": att.get("name", file_info.get("name", "unknown")),
