@@ -8,6 +8,12 @@ const DROP_REQUEST_HEADERS = new Set([
   'trailers', 'upgrade', 'proxy-authenticate', 'proxy-authorization',
 ])
 
+// Headers that must not be forwarded back to the browser
+// Node.js fetch auto-decompresses, so Content-Encoding would cause double-decompression
+const DROP_RESPONSE_HEADERS = new Set([
+  'content-encoding', 'transfer-encoding', 'connection',
+])
+
 async function proxy(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -35,6 +41,7 @@ async function proxy(
 
   const responseHeaders = new Headers()
   backendResponse.headers.forEach((value, key) => {
+    if (DROP_RESPONSE_HEADERS.has(key.toLowerCase())) return
     // set-cookie must use append to preserve multiple values
     if (key.toLowerCase() === 'set-cookie') {
       responseHeaders.append(key, value)
