@@ -150,3 +150,4 @@ Planned, but not implemented yet:
 - Calendar view
 - Galleries
 - Compose/send messages
+- PWA icons (proper 192×512 branded icons)
