@@ -303,18 +303,22 @@ class AulaClient:
         headers = {"content-type": "application/json"}
         if csrf_token:
             headers["csrfp-token"] = csrf_token
-        res = self._session.post(
-            self.apiurl
-            + "?method=messaging.markThreadAsRead"
-            + self._get_access_token_param(),
-            json={"threadIds": [thread_id]},
-            headers=headers,
-            verify=True,
-        )
-        _LOGGER.warning(f"markThreadAsRead response: {res.status_code} {res.text[:300]}")
-        if res.status_code == 200:
-            data = res.json()
-            return data.get("status", {}).get("message") == "OK"
+
+        # Try known method names - Aula API is undocumented
+        for method in ["messaging.markThreadRead", "messaging.markAsRead", "messaging.updateThread"]:
+            res = self._session.post(
+                self.apiurl
+                + f"?method={method}"
+                + self._get_access_token_param(),
+                json={"threadIds": [thread_id]},
+                headers=headers,
+                verify=True,
+            )
+            _LOGGER.warning(f"markThreadRead [{method}]: {res.status_code} {res.text[:200]}")
+            if res.status_code == 200:
+                data = res.json()
+                if (data.get("status") or {}).get("message") == "OK":
+                    return True
         return False
 
     def _get_access_token_param(self):
