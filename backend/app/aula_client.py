@@ -138,7 +138,7 @@ class AulaClient:
             verify=True,
         )
         data = res.json()
-        threads = data.get("data", {}).get("threads", [])
+        threads = (data.get("data") or {}).get("threads", [])
         return threads
 
     def get_posts(self, index: int = 0, limit: int = 10) -> dict:
