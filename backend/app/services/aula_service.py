@@ -168,6 +168,8 @@ class AulaService:
             # Cache subscription ID for use in mark-as-read
             if thread_id:
                 self._subscription_id_cache[thread_id] = subscription_id
+            # Attachments from latest message (if present in thread list response)
+            latest_attachments = latest.get("attachments") or []
             messages.append({
                 "id": thread_id,
                 "subject": thread.get("subject", "(ingen emne)"),
@@ -177,6 +179,7 @@ class AulaService:
                 "preview": latest.get("text", {}).get("html", "")[:150] if isinstance(latest.get("text"), dict) else str(latest.get("text", ""))[:150],
                 "child_profile_ids": child_profile_ids,
                 "recipients": [r.get("fullName", "") for r in recipients[:5]],
+                "attachments": [{"id": str(a.get("id", "")), "name": a.get("name", "")} for a in latest_attachments],
             })
         return messages
 
