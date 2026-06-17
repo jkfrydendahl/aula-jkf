@@ -657,7 +657,10 @@ class AulaClient:
                 + self._get_access_token_param(),
                 verify=True,
             ).json()
-            is_logged_in = response["status"]["message"] == "OK"
+            is_logged_in = (
+                response is not None
+                and response.get("status", {}).get("message") == "OK"
+            )
 
         _LOGGER.debug("is_logged_in? " + str(is_logged_in))
 

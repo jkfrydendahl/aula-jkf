@@ -13,12 +13,15 @@ _thread_cache: dict[int, tuple[dict, float]] = {}
 _THREAD_CACHE_TTL = 300  # 5 minutes
 
 
+import threading
+
 class AulaService:
     """Wraps the Aula client and normalizes data for API consumption."""
 
     def __init__(self, client: AulaClient, token_repository: Optional[TokenRepository] = None):
         self._client = client
         self._token_repo = token_repository
+        self._load_lock = threading.Lock()
 
     def _ensure_tokens_loaded(self):
         """Reload tokens from repository into client if missing or stale."""
@@ -51,12 +54,15 @@ class AulaService:
         self._client.update_data()
 
     def ensure_data_loaded(self) -> None:
-        """Ensure the client has data; fetch if empty."""
+        """Ensure the client has data; fetch if empty. Thread-safe."""
         self._ensure_tokens_loaded()
         if not self._client._children:
-            _LOGGER.info("No cached data, calling login() + update_data()")
-            self._client.login()
-            self._client.update_data()
+            with self._load_lock:
+                # Re-check inside lock — another thread may have loaded while we waited
+                if not self._client._children:
+                    _LOGGER.info("No cached data, calling login() + update_data()")
+                    self._client.login()
+                    self._client.update_data()
 
     def get_children(self) -> list[dict[str, Any]]:
         """Return list of child profiles."""
