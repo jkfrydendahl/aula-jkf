@@ -47,10 +47,26 @@ def create_app(
     stored_tokens = token_repo.load()
 
     # Aula client for data fetching (uses stored tokens only, no credentials)
+    def _on_tokens_updated(tokens):
+        """Persist tokens — handles both TokenData and raw dict from login flow."""
+        if isinstance(tokens, TokenData):
+            token_repo.save(tokens)
+        elif isinstance(tokens, dict):
+            try:
+                token_repo.save(TokenData(
+                    access_token=tokens["access_token"],
+                    refresh_token=tokens["refresh_token"],
+                    expires_at=tokens.get("expires_at", tokens.get("expires_in", 3600) + time.time()),
+                ))
+            except Exception as e:
+                _LOGGER.warning(f"Could not persist tokens from dict: {e}")
+        else:
+            _LOGGER.warning(f"Unknown token type: {type(tokens)}")
+
     aula_client = AulaClient(
         mitid_username="",  # Not needed for data fetching, only for re-auth
         stored_tokens=stored_tokens.model_dump() if stored_tokens else None,
-        on_tokens_updated=lambda tokens: token_repo.save(tokens),
+        on_tokens_updated=_on_tokens_updated,
     )
 
     # Services
