@@ -103,6 +103,7 @@ export interface Message {
   text?: string;
   child_profile_ids?: string[];
   recipients?: string[];
+  attachments?: { id: string; name: string; url?: string }[];
 }
 
 export interface ThreadDetail {
