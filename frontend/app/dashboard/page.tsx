@@ -430,9 +430,6 @@ export default function DashboardPage() {
           >
             Log ind med MitID
           </a>
-          <p className="text-xs text-gray-400 dark:text-gray-500">
-            Login kræver en hjemmenetværksforbindelse (WiFi/kabel).
-          </p>
           <button
             onClick={async () => {
               await api.appAuthLogout().catch(() => {});
