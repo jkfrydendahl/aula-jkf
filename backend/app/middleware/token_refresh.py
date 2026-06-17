@@ -14,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 TOKEN_REFRESH_THRESHOLD = 300  # 5 minutes
 
 # Routes that bypass token checking
-AUTH_ROUTE_PREFIXES = ("/auth/", "/docs", "/openapi.json")
+AUTH_ROUTE_PREFIXES = ("/auth/", "/app-auth/", "/health", "/docs", "/openapi.json")
 
 
 class TokenRefreshMiddleware:

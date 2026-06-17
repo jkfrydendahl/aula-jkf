@@ -326,6 +326,14 @@ export default function DashboardPage() {
     }
   }
 
+  async function logoutAppAuth() {
+    try {
+      await api.appAuthLogout();
+    } finally {
+      window.location.href = "/";
+    }
+  }
+
   const filteredMessages = childFilter === "all"
     ? messages
     : messages.filter((msg) =>
@@ -393,7 +401,15 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <header className="max-w-4xl mx-auto mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Aula Dashboard</h1>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold text-gray-900">Aula Dashboard</h1>
+          <button
+            onClick={logoutAppAuth}
+            className="text-sm text-gray-500 hover:text-gray-800 underline underline-offset-2"
+          >
+            Log ud
+          </button>
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto space-y-8">
@@ -1001,5 +1017,4 @@ export default function DashboardPage() {
     </div>
   );
 }
-
 

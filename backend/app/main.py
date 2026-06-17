@@ -1,11 +1,11 @@
 import time
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.settings import Settings
+from app.settings import AppAuthSettings, Settings
 from app.aula_client import AulaClient
 from app.models.schemas import TokenData
 from app.services.aula_service import AulaService
@@ -19,17 +19,25 @@ from app.routers.auth_router import create_auth_router
 from app.routers.data_router import create_data_router
 from app.routers.action_router import create_action_router
 from app.routers.push_router import create_push_router
+from app.routers.app_auth_router import create_app_auth_router
+from app.dependencies.app_auth import require_app_auth
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    app_auth_settings: AppAuthSettings | None = None,
+) -> FastAPI:
     if settings is None:
         settings = Settings()
+    if app_auth_settings is None:
+        app_auth_settings = AppAuthSettings()
 
     app = FastAPI(title="Aula PWA Backend", version="0.1.0")
 
     app.state.settings = settings
+    app.state.app_auth_settings = app_auth_settings
 
     # Repositories
     token_repo = FileTokenRepository(settings.token_store_path)
@@ -111,11 +119,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             content={"detail": str(exc)},
         )
 
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
     # Routers
-    app.include_router(create_auth_router(auth_service, admin_secret=settings.admin_secret))
-    app.include_router(create_data_router(aula_service))
-    app.include_router(create_action_router(aula_service))
-    app.include_router(create_push_router(push_service))
+    app.include_router(create_app_auth_router())
+    app.include_router(
+        create_auth_router(auth_service, admin_secret=settings.admin_secret),
+        dependencies=[Depends(require_app_auth)],
+    )
+    app.include_router(
+        create_data_router(aula_service),
+        dependencies=[Depends(require_app_auth)],
+    )
+    app.include_router(
+        create_action_router(aula_service),
+        dependencies=[Depends(require_app_auth)],
+    )
+    app.include_router(
+        create_push_router(push_service),
+        dependencies=[Depends(require_app_auth)],
+    )
 
     return app
 

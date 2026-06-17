@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import AppAuthGate from "@/app/components/AppAuthGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +33,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#2563eb" />
       </head>
       <body className="min-h-full flex flex-col">
-        {children}
+        <AppAuthGate>{children}</AppAuthGate>
         <script
           dangerouslySetInnerHTML={{
             __html: `

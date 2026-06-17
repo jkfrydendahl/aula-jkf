@@ -1,24 +1,50 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+type RequestOptions = RequestInit & {
+  noRedirectOn401?: boolean;
+};
+
+async function request<T>(path: string, options?: RequestOptions): Promise<T> {
+  const { noRedirectOn401, ...fetchOptions } = options || {};
   const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
+    ...fetchOptions,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...options?.headers,
+      ...fetchOptions.headers,
     },
   });
 
-  if (res.status === 401) {
-    const data = await res.json();
-    if (data.re_auth_required) {
+  let data: unknown = null;
+  if (res.status === 401 || !res.ok) {
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+  }
+
+  if (res.status === 401 && !noRedirectOn401) {
+    const authError = data as { app_auth_required?: boolean; re_auth_required?: boolean; detail?: { app_auth_required?: boolean; re_auth_required?: boolean } } | null;
+    if (authError?.app_auth_required || authError?.detail?.app_auth_required) {
+      window.location.href = "/";
+      throw new Error("App authentication required");
+    }
+    if (authError?.re_auth_required || authError?.detail?.re_auth_required) {
       window.location.href = "/login";
       throw new Error("Authentication required");
     }
   }
 
   if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
+    const message =
+      (data as { detail?: string } | null)?.detail ||
+      `API error: ${res.status}`;
+    throw new Error(message);
+  }
+
+  if (res.status === 204) {
+    return undefined as T;
   }
 
   return res.json();
@@ -138,6 +164,22 @@ export interface VacationRegistration {
 
 // Auth
 export const api = {
+  appAuthMe: () =>
+    request<{ authenticated: boolean }>("/app-auth/me", { noRedirectOn401: true }),
+
+  appAuthLogin: (password: string) =>
+    request<{ authenticated: boolean }>("/app-auth/login", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+      noRedirectOn401: true,
+    }),
+
+  appAuthLogout: () =>
+    request<{ authenticated: boolean }>("/app-auth/logout", {
+      method: "POST",
+      noRedirectOn401: true,
+    }),
+
   authStart: (username: string) =>
     request<AuthStartResponse>("/auth/start", {
       method: "POST",

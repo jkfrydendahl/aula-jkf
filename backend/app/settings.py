@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -26,3 +25,15 @@ class Settings(BaseSettings):
     sync_target_url: str = ""
 
     model_config = {"env_prefix": "AULA_"}
+
+
+class AppAuthSettings(BaseSettings):
+    app_auth_enabled: bool = True
+    app_auth_password: str = ""
+    app_session_secret: str = ""
+    app_session_cookie_name: str = "aula_jkf_session"
+    app_session_ttl_seconds: int = 604800
+    # Set to false when testing locally over HTTP (e.g. via SSH tunnel)
+    app_session_secure_cookie: bool = True
+
+    model_config = {"env_prefix": "APP_"}
