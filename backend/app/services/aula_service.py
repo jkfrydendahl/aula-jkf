@@ -508,9 +508,7 @@ class AulaService:
     def refresh_messages(self) -> None:
         """Fetch fresh message threads from Aula and update unread count."""
         try:
-            self._ensure_tokens_loaded()
-            if not self._client._children:
-                return
+            self.ensure_data_loaded()
             threads = self._client.get_message_threads(page=0)
             self._client._threads = threads
             self._client.unread_messages = sum(

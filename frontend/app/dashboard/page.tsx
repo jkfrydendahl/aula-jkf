@@ -161,7 +161,10 @@ export default function DashboardPage() {
       // Auto-mark as read when opening
       if (!msg.is_read) {
         setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: true } : m)));
-        api.markRead(msg.id).catch(() => {});
+        api.markRead(msg.id).catch(() => {
+          // Revert optimistic update if mark-as-read fails
+          setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: false } : m)));
+        });
       }
     } catch (err) {
       console.error("Failed to load thread:", err);
