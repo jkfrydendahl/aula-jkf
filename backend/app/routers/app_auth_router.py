@@ -53,7 +53,7 @@ def create_app_auth_router() -> APIRouter:
             value=token,
             httponly=True,
             secure=secure,
-            samesite="none" if secure else "lax",
+            samesite="lax",
             path="/",
             max_age=settings.session_ttl_seconds,
         )
@@ -70,7 +70,7 @@ def create_app_auth_router() -> APIRouter:
             path="/",
             secure=secure,
             httponly=True,
-            samesite="none" if secure else "lax",
+            samesite="lax",
             max_age=0,
         )
         return response
@@ -105,6 +105,7 @@ def create_app_auth_router() -> APIRouter:
     async def app_users(request: Request):
         settings = request.app.state.app_auth_settings
         users = settings.get_users()
-        return [{"user_id": user.user_id, "name": user.name} for user in users]
+        # Return only names — no IDs needed for the login selector
+        return [{"name": user.name} for user in users]
 
     return router

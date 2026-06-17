@@ -43,6 +43,7 @@ class AulaClient:
         mitid_identity=1,
         login_client=None,
         on_tokens_updated=None,
+        token_refresh_lock=None,
     ):
         self._mitid_username = mitid_username
         self._auth_method = auth_method
@@ -91,8 +92,8 @@ class AulaClient:
         # Token storage
         self._tokens = stored_tokens or {}
 
-        # Token refresh lock to prevent concurrent refresh attempts
-        self._token_refresh_lock = threading.Lock()
+        # Token refresh lock — shared with middleware renew_fn to prevent concurrent refresh
+        self._token_refresh_lock = token_refresh_lock or threading.Lock()
 
         # HTTP session
         self._session = None

@@ -61,12 +61,10 @@ def create_app(
         return _on_tokens_updated
 
     def make_renew_fn(aula_client: AulaClient) -> Callable[[str], TokenData]:
-        import threading
-        _refresh_lock = threading.Lock()
-
+        # Shared with AulaClient._token_refresh_lock so both paths serialize on the same lock
         def renew_token(refresh_token: str) -> TokenData:
             """Renew the access token using the Aula login client (serialized per user)."""
-            with _refresh_lock:
+            with aula_client._token_refresh_lock:
                 login_client = aula_client._aula_client
                 login_client.tokens = {"refresh_token": refresh_token}
                 success = login_client.renew_access_token()

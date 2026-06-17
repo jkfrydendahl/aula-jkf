@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 
 type AppAuthUser = {
-  user_id: string;
   name: string;
 };
 
@@ -117,7 +116,7 @@ export default function AppAuthGate({ children }: { children: React.ReactNode })
               <div className="space-y-3">
                 {users.map((user) => (
                   <button
-                    key={user.user_id}
+                    key={user.name}
                     type="button"
                     onClick={() => onSelectUser(user)}
                     className="w-full rounded-xl border border-gray-200 px-4 py-3 text-left font-medium text-gray-900 transition hover:border-blue-500 hover:bg-blue-50 dark:border-gray-700 dark:text-white dark:hover:border-blue-400 dark:hover:bg-gray-700"

@@ -168,7 +168,7 @@ export const api = {
     request<{ authenticated: boolean; username?: string }>("/app-auth/me", { noRedirectOn401: true }),
 
   appAuthUsers: () =>
-    request<{ user_id: string; name: string }[]>("/app-auth/users", { noRedirectOn401: true }),
+    request<{ name: string }[]>("/app-auth/users", { noRedirectOn401: true }),
 
   appAuthLogin: (username: string, password: string) =>
     request<{ authenticated: boolean }>("/app-auth/login", {

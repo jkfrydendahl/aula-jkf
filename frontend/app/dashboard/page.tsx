@@ -244,9 +244,11 @@ export default function DashboardPage() {
           )
         );
         setSelectedVacation(null);
+      } else {
+        showToast("Kunne ikke sende feriesvar", "error");
       }
     } catch (err) {
-      // Keep form open on error
+      showToast("Kunne ikke sende feriesvar", "error");
     } finally {
       setVacationSubmitting(false);
     }
@@ -774,11 +776,14 @@ export default function DashboardPage() {
                       </time>
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleReadStatus(msg); }}
-                        className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full transition ${msg.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-600 dark:hover:text-gray-300" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-500 dark:hover:text-gray-400"}`}
+                        className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full transition ${msg.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700"}`}
                         title={msg.is_read ? "Markér som ulæst" : "Markér som læst"}
                       >
                         {msg.is_read ? "Læst" : "Ulæst"}
                       </button>
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">📎 {msg.attachments.length}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1034,11 +1039,11 @@ export default function DashboardPage() {
                       )}
                     </div>
                     <div className="flex flex-col items-end ml-4">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${vac.is_missing_answer ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium" : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"}`}>
-                        {vac.is_missing_answer ? "Mangler svar" : "Besvaret"}
-                      </span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                         Frist: {new Date(vac.deadline).toLocaleDateString("da-DK")}
+                      </time>
+                      <span className={`text-xs mt-1 px-2 py-0.5 rounded-full ${vac.is_missing_answer ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium" : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"}`}>
+                        {vac.is_missing_answer ? "Mangler svar" : "Besvaret"}
                       </span>
                     </div>
                   </div>
