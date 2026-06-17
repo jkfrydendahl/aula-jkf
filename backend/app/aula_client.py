@@ -296,7 +296,7 @@ class AulaClient:
         )
         return res.json().get("data", {})
 
-    def mark_thread_read(self, thread_id: int) -> bool:
+    def mark_thread_read(self, thread_id: int, message_ids: list[str] | None = None) -> bool:
         """Mark a thread as read."""
         self._ensure_valid_token()
         csrf_token = self._get_csrf_token()
@@ -304,17 +304,28 @@ class AulaClient:
         if csrf_token:
             headers["csrfp-token"] = csrf_token
 
-        # Try known method names - Aula API is undocumented
-        for method in ["messaging.markThreadRead", "messaging.markAsRead", "messaging.updateThread"]:
+        attempts = [
+            ("messaging.markThreadAsRead", {"threadIds": [thread_id]}),
+            ("messaging.markThreadAsRead", {"ids": [thread_id]}),
+            ("messaging.markThreadAsRead", {"id": thread_id}),
+        ]
+        # Also try with message IDs if provided
+        if message_ids:
+            attempts += [
+                ("messaging.markThreadAsRead", {"messageIds": message_ids}),
+                ("messaging.markAsRead", {"ids": message_ids}),
+            ]
+
+        for method, payload in attempts:
             res = self._session.post(
                 self.apiurl
                 + f"?method={method}"
                 + self._get_access_token_param(),
-                json={"threadIds": [thread_id]},
+                json=payload,
                 headers=headers,
                 verify=True,
             )
-            _LOGGER.warning(f"markThreadRead [{method}]: {res.status_code} {res.text[:200]}")
+            _LOGGER.warning(f"markThreadRead [{method}] payload={payload}: {res.status_code} {res.text[:200]}")
             if res.status_code == 200:
                 data = res.json()
                 if (data.get("status") or {}).get("message") == "OK":

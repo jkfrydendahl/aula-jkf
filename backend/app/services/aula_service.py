@@ -318,9 +318,13 @@ class AulaService:
         return result
 
     def mark_thread_read(self, thread_id: int) -> bool:
-        """Mark a thread as read."""
+        """Mark a thread as read, passing message IDs from cache if available."""
         self._ensure_tokens_loaded()
-        return self._client.mark_thread_read(thread_id)
+        cached = _thread_cache.get(thread_id)
+        message_ids = None
+        if cached:
+            message_ids = [m["id"] for m in cached[0].get("messages", [])]
+        return self._client.mark_thread_read(thread_id, message_ids=message_ids)
 
     def get_calendar(self, child_id: str) -> list[dict[str, Any]]:
         """Return calendar events for a child."""
