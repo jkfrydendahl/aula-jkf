@@ -5,7 +5,7 @@ Aula JKF is a private FastAPI + Next.js PWA for accessing Aula with MitID login,
 ## Production setup
 
 - **Frontend:** Next.js PWA on **Vercel**
-- **Backend:** FastAPI in **Docker** on a **Webdock VPS** at `193.181.210.163`
+- **Backend:** FastAPI in **Docker** on a **Webdock VPS** at `YOUR_VPS_IP`
 - **Server path:** `/opt/aula-jkf/`
 - **Backend env file:** `/opt/aula-jkf/backend.env`
 - **Persistent data:** `/opt/aula-jkf/data/`
@@ -116,7 +116,7 @@ Open `http://localhost:3000`.
 If you want to run the frontend locally while using the backend on the VPS, open an SSH tunnel:
 
 ```bash
-ssh -L 8000:localhost:8000 admin@193.181.210.163
+ssh -L 8000:localhost:8000 admin@YOUR_VPS_IP
 ```
 
 Then use:

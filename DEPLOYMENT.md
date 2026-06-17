@@ -3,14 +3,14 @@
 This project uses a split production deployment:
 
 - **Frontend:** Next.js PWA on **Vercel**
-- **Backend:** FastAPI in **Docker** on a **Webdock VPS** at `193.181.210.163`
+- **Backend:** FastAPI in **Docker** on a **Webdock VPS** at `YOUR_VPS_IP`
 
 ## Production architecture
 
 ### Backend
 
 - SSH user: `admin`
-- Host: `193.181.210.163`
+- Host: `YOUR_VPS_IP`
 - Project directory: `/opt/aula-jkf/`
 - Environment file: `/opt/aula-jkf/backend.env`
 - Persistent data directory: `/opt/aula-jkf/data/`
@@ -67,7 +67,7 @@ Set:
 SSH to the server:
 
 ```bash
-ssh admin@193.181.210.163
+ssh admin@YOUR_VPS_IP
 ```
 
 Deploy with the exact commands currently used in production:
@@ -182,7 +182,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 If you want to run the frontend locally but use the backend on the VPS:
 
 ```bash
-ssh -L 8000:localhost:8000 admin@193.181.210.163
+ssh -L 8000:localhost:8000 admin@YOUR_VPS_IP
 ```
 
 Then set:
