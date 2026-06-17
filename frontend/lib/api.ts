@@ -31,8 +31,8 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
       throw new Error("App authentication required");
     }
     if (authError?.re_auth_required || authError?.detail?.re_auth_required) {
-      window.location.href = "/login";
-      throw new Error("Authentication required");
+      // Don't auto-redirect — throw a typed error so the dashboard can show an inline banner
+      throw Object.assign(new Error("Aula re-authentication required"), { re_auth_required: true });
     }
   }
 

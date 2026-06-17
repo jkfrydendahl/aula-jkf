@@ -147,7 +147,11 @@ export default function DashboardPage() {
 
       setPresence(await fetchPresenceMap(childrenData));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load data");
+      if (err instanceof Error && (err as Error & { re_auth_required?: boolean }).re_auth_required) {
+        setAuthNeeded(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to load data");
+      }
     } finally {
       setLoading(false);
     }
