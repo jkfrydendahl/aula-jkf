@@ -61,11 +61,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900">
         <div>
-          <h1 className="text-3xl font-bold text-center text-gray-900">Aula</h1>
-          <p className="mt-2 text-center text-gray-600">Log ind med MitID</p>
+          <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white">Aula</h1>
+          <p className="mt-2 text-center text-gray-600 dark:text-gray-400">Log ind med MitID</p>
         </div>
 
         {!flowId && (
@@ -75,7 +75,7 @@ export default function LoginPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="MitID brugernavn"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
             />
             <button
@@ -90,17 +90,17 @@ export default function LoginPage() {
         {flowId && status?.status === "pending" && (
           <div className="text-center space-y-4">
             {!status.qr_data && (
-              <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
+              <div className="w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
                 <svg className="w-8 h-8 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               </div>
             )}
-            <p className="text-gray-600">{status.message || "Godkend i MitID app..."}</p>
+            <p className="text-gray-600 dark:text-gray-400">{status.message || "Godkend i MitID app..."}</p>
             {status.qr_data && (
-              <div className="p-4 bg-white border border-gray-200 rounded-lg">
-                <p className="text-sm text-gray-500 mb-3">Scan med MitID app:</p>
+              <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Scan med MitID app:</p>
                 <div
                   className="mx-auto w-[250px] h-[250px] [&>svg]:w-full [&>svg]:h-full"
                   dangerouslySetInnerHTML={{
@@ -114,12 +114,12 @@ export default function LoginPage() {
 
         {status?.status === "awaiting_identity" && status.identities && (
           <div className="space-y-4">
-            <p className="text-gray-700 font-medium">Vælg identitet:</p>
+            <p className="text-gray-700 dark:text-gray-300 font-medium">Vælg identitet:</p>
             {status.identities.map((name, idx) => (
               <button
                 key={idx}
                 onClick={() => selectIdentity(idx + 1)}
-                className="w-full py-3 px-4 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition text-left"
+                className="w-full py-3 px-4 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition text-left"
               >
                 {name}
               </button>
@@ -128,8 +128,8 @@ export default function LoginPage() {
         )}
 
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700 text-sm">{error}</p>
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
           </div>
         )}
       </div>

@@ -67,22 +67,22 @@ export default function AppAuthGate({ children }: { children: React.ReactNode })
 
   if (!authenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
         <form
           onSubmit={onSubmit}
-          className="w-full max-w-sm bg-white rounded-xl shadow p-6 space-y-4"
+          className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-xl shadow dark:shadow-gray-900 p-6 space-y-4"
         >
-          <h1 className="text-xl font-semibold text-gray-900">Adgangskode kræves</h1>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Adgangskode kræves</h1>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Adgangskode"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             autoFocus
             required
           />
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
           <button
             type="submit"
             disabled={submitting}

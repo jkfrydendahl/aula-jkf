@@ -363,15 +363,15 @@ export default function DashboardPage() {
 
   if (authNeeded) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg text-center space-y-4">
-          <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-md w-full p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900 text-center space-y-4">
+          <div className="w-16 h-16 mx-auto bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Login påkrævet</h2>
-          <p className="text-gray-600">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Login påkrævet</h2>
+          <p className="text-gray-600 dark:text-gray-400">
             Din session er udløbet. Log ind igen fra dit hjemmenetværk for at forny adgangen.
           </p>
           <a
@@ -380,7 +380,7 @@ export default function DashboardPage() {
           >
             Log ind med MitID
           </a>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 dark:text-gray-500">
             Login kræver en hjemmenetværksforbindelse (WiFi/kabel).
           </p>
         </div>
@@ -391,8 +391,8 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="p-6 bg-red-50 rounded-lg max-w-md">
-          <p className="text-red-700">{error}</p>
+        <div className="p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg max-w-md">
+          <p className="text-red-700 dark:text-red-400">{error}</p>
           <button onClick={loadData} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">
             Prøv igen
           </button>
@@ -402,13 +402,13 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <header className="max-w-4xl mx-auto mb-8">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">Aula Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Aula Dashboard</h1>
           <button
             onClick={logoutAppAuth}
-            className="text-sm text-gray-500 hover:text-gray-800 underline underline-offset-2"
+            className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline underline-offset-2"
           >
             Log ud
           </button>
@@ -418,41 +418,41 @@ export default function DashboardPage() {
       <main className="max-w-4xl mx-auto space-y-8">
         {/* Children & Presence */}
         <section>
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Børn</h2>
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Børn</h2>
           <div className="grid gap-4 md:grid-cols-2">
             {children.map((child) => {
               const p = presence[child.id];
               return (
-                <div key={child.id} className="bg-white rounded-lg shadow p-5">
-                  <h3 className="font-medium text-gray-900">{child.name}</h3>
-                  <p className="text-sm text-gray-500">{child.institution}</p>
+                <div key={child.id} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900 p-5">
+                  <h3 className="font-medium text-gray-900 dark:text-white">{child.name}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{child.institution}</p>
                   {p && (
                     <div className="mt-3">
                       <div className="space-y-0">
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Status: {p.status === "checked_in" ? "Til stede" : p.status === "checked_out" ? "Gået hjem" : p.status === "sick" ? "Syg" : p.status === "absent" ? "Fraværende" : "Ikke til stede"}
                           {p.location && ` (${p.location})`}
                         </p>
                         {p.check_in_time && (
-                          <p className="text-sm text-gray-600">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
                             Ankommet: {p.check_in_time.slice(0, 5)}
                             {p.check_out_time && ` — Gået: ${p.check_out_time.slice(0, 5)}`}
                           </p>
                         )}
                         {!p.check_in_time && p.planned_start && (
-                          <p className="text-sm text-gray-400">
+                          <p className="text-sm text-gray-400 dark:text-gray-500">
                             Planlagt: {p.planned_start.slice(0, 5)} — {p.planned_end?.slice(0, 5) || "?"}
                           </p>
                         )}
-                        <p className="text-sm text-gray-600">
-                          Hentetype: {p.exit_with || <span className="text-gray-400 italic">Ikke angivet</span>}{p.exit_with && p.planned_end && ` kl. ${p.planned_end.slice(0, 5)}`}
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Hentetype: {p.exit_with || <span className="text-gray-400 dark:text-gray-500 italic">Ikke angivet</span>}{p.exit_with && p.planned_end && ` kl. ${p.planned_end.slice(0, 5)}`}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2 mt-3">
                         {(p.status === "not_present" || p.status === "planned") && (
                           <button
                             onClick={() => updatePresence(child.id, "checked_in")}
-                            className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 hover:bg-green-200"
+                            className="text-xs px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
                           >
                             Registrér ankomst
                           </button>
@@ -466,7 +466,7 @@ export default function DashboardPage() {
                         {p.status !== "sick" && (
                           <button
                             onClick={() => markSick(child.id, true)}
-                            className="text-xs px-3 py-1 rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200"
+                            className="text-xs px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50"
                           >
                             Meld syg
                           </button>
@@ -474,7 +474,7 @@ export default function DashboardPage() {
                         {p.status === "sick" && (
                           <button
                             onClick={() => markSick(child.id, false)}
-                            className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 hover:bg-green-200"
+                            className="text-xs px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
                           >
                             Fjern sygemelding
                           </button>
@@ -483,13 +483,13 @@ export default function DashboardPage() {
 
                       {/* Pickup form */}
                       {pickupFormChild === child.id && (
-                        <div className="mt-3 p-3 bg-gray-50 rounded-lg border space-y-3">
+                        <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 space-y-3">
                           <div>
-                            <label className="text-xs font-medium text-gray-600 block mb-1">Hentetype</label>
+                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Hentetype</label>
                             <select
                               value={pickupType}
                               onChange={(e) => setPickupType(Number(e.target.value))}
-                              className="w-full text-sm border rounded px-2 py-1"
+                              className="w-full text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded px-2 py-1"
                             >
                               <option value={0}>Hentes af</option>
                               <option value={3}>Gå hjem med</option>
@@ -500,23 +500,23 @@ export default function DashboardPage() {
 
                           {(pickupType === 0 || pickupType === 2 || pickupType === 3) && (
                             <div>
-                              <label className="text-xs font-medium text-gray-600 block mb-1">Hentetid</label>
+                              <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Hentetid</label>
                               <input
                                 type="time"
                                 value={pickupExitTime}
                                 onChange={(e) => setPickupExitTime(e.target.value)}
-                                className="w-full text-sm border rounded px-2 py-1"
+                                className="w-full text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded px-2 py-1"
                               />
                             </div>
                           )}
 
                           {(pickupType === 0) && (
                             <div>
-                              <label className="text-xs font-medium text-gray-600 block mb-1">Hentes af</label>
+                              <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Hentes af</label>
                               <select
                                 value={pickupExitWith}
                                 onChange={(e) => setPickupExitWith(e.target.value)}
-                                className="w-full text-sm border rounded px-2 py-1"
+                                className="w-full text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded px-2 py-1"
                               >
                                 {pickupResponsibles.map((r) => (
                                   <option key={r.id} value={`${r.name} (${r.relation})`}>
@@ -529,11 +529,11 @@ export default function DashboardPage() {
 
                           {(pickupType === 3) && (
                             <div>
-                              <label className="text-xs font-medium text-gray-600 block mb-1">Gå hjem med</label>
+                              <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">Gå hjem med</label>
                               <select
                                 value={pickupExitWith}
                                 onChange={(e) => setPickupExitWith(e.target.value)}
-                                className="w-full text-sm border rounded px-2 py-1"
+                                className="w-full text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded px-2 py-1"
                               >
                                 <option value="">Vælg barn...</option>
                                 {goHomeWithList.map((c) => (
@@ -555,7 +555,7 @@ export default function DashboardPage() {
                             </button>
                             <button
                               onClick={() => setPickupFormChild(null)}
-                              className="text-xs px-3 py-1 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300"
+                              className="text-xs px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600"
                             >
                               Annullér
                             </button>
@@ -577,7 +577,7 @@ export default function DashboardPage() {
               <select
                 value={childFilter}
                 onChange={(e) => setChildFilter(e.target.value)}
-                className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white"
+                className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               >
                 <option value="all">Alle børn</option>
                 {children.map((child) => (
@@ -592,33 +592,33 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => { setActiveTab("messages"); setSelectedPost(null); }}
-                className={`inline-flex items-center text-lg font-semibold ${activeTab === "messages" ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                className={`inline-flex items-center text-lg font-semibold ${activeTab === "messages" ? "text-gray-900 dark:text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"}`}
               >
                 <span className={activeTab === "messages" ? "underline underline-offset-4" : ""}>Beskeder</span>
                 {messages.filter((m) => !m.is_read).length > 0 && (
-                  <span className="ml-2 px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-full">
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full">
                     {messages.filter((m) => !m.is_read).length}
                   </span>
                 )}
               </button>
               <button
                 onClick={() => { setActiveTab("posts"); setSelectedThread(null); }}
-                className={`inline-flex items-center text-lg font-semibold ${activeTab === "posts" ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                className={`inline-flex items-center text-lg font-semibold ${activeTab === "posts" ? "text-gray-900 dark:text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"}`}
               >
                 <span className={activeTab === "posts" ? "underline underline-offset-4" : ""}>Opslag</span>
                 {posts.filter((p) => !p.is_read && p.is_important).length > 0 && (
-                  <span className="ml-2 px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-full">
                     {posts.filter((p) => !p.is_read && p.is_important).length} vigtige ulæste
                   </span>
                 )}
               </button>
               <button
                 onClick={() => { setActiveTab("vacation"); setSelectedThread(null); setSelectedPost(null); }}
-                className={`inline-flex items-center text-lg font-semibold ${activeTab === "vacation" ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                className={`inline-flex items-center text-lg font-semibold ${activeTab === "vacation" ? "text-gray-900 dark:text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"}`}
               >
                 <span className={activeTab === "vacation" ? "underline underline-offset-4" : ""}>Ferie</span>
                 {vacations.filter((v) => v.is_missing_answer).length > 0 && (
-                  <span className="ml-2 px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-full">
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full">
                     {vacations.filter((v) => v.is_missing_answer).length}
                   </span>
                 )}
@@ -628,12 +628,12 @@ export default function DashboardPage() {
 
           {/* Thread detail view */}
           {activeTab === "messages" && selectedThread && (
-            <div className="bg-white rounded-lg shadow mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900 mb-4">
               <div className="p-4 flex items-center justify-between">
-                <h3 className="font-medium text-gray-900">{selectedThread.subject || "(ingen emne)"}</h3>
+                <h3 className="font-medium text-gray-900 dark:text-white">{selectedThread.subject || "(ingen emne)"}</h3>
                 <button
                   onClick={() => setSelectedThread(null)}
-                  className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 transition leading-none"
+                  className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition leading-none"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
@@ -641,24 +641,24 @@ export default function DashboardPage() {
                   Tilbage
                 </button>
               </div>
-              <div className="mx-5"><hr className="border-gray-200" /></div>
+              <div className="mx-5"><hr className="border-gray-200 dark:border-gray-700" /></div>
               <div className="max-h-96 overflow-y-auto">
                 {selectedThread.messages.map((m, i) => (
                   <div key={m.id}>
                     {i > 0 && (
                       <div className="mx-6">
-                        <hr className="border-gray-200" />
+                        <hr className="border-gray-200 dark:border-gray-700" />
                       </div>
                     )}
                     <div className="p-4">
                       <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-medium text-gray-800">{m.sender}</span>
-                        <time className="text-xs text-gray-400">
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{m.sender}</span>
+                        <time className="text-xs text-gray-400 dark:text-gray-500">
                           {new Date(m.timestamp).toLocaleString("da-DK")}
                         </time>
                       </div>
                       <div
-                        className="text-sm text-gray-700 prose prose-sm max-w-none"
+                        className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none"
                         dangerouslySetInnerHTML={{ __html: m.text }}
                       />
                       {m.attachments && m.attachments.length > 0 && (
@@ -669,9 +669,9 @@ export default function DashboardPage() {
                               href={att.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                              className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
                             >
-                              <span className="text-gray-400">📎</span>
+                              <span className="text-gray-400 dark:text-gray-500">📎</span>
                               {att.name}
                             </a>
                           ))}
@@ -686,19 +686,19 @@ export default function DashboardPage() {
 
           {/* Thread list */}
           {activeTab === "messages" && !selectedThread && (
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900">
             {filteredMessages.length === 0 && (
-              <p className="p-4 text-gray-500">Ingen beskeder</p>
+              <p className="p-4 text-gray-500 dark:text-gray-400">Ingen beskeder</p>
             )}
             {filteredMessages.map((msg, i) => (
               <div key={msg.id}>
                 {i > 0 && (
                   <div className="mx-5">
-                    <hr className="border-gray-200" />
+                    <hr className="border-gray-200 dark:border-gray-700" />
                   </div>
                 )}
                 <div
-                  className={`p-4 cursor-pointer hover:bg-gray-50 transition ${!msg.is_read ? "bg-blue-50" : ""}`}
+                  className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${!msg.is_read ? "bg-blue-50 dark:bg-blue-900/30" : ""}`}
                   onClick={() => openThread(msg)}
                 >
                   <div className="flex justify-between items-start">
@@ -707,24 +707,24 @@ export default function DashboardPage() {
                         {!msg.is_read && (
                           <span className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
                         )}
-                        <p className={`text-gray-900 truncate ${!msg.is_read ? "font-semibold" : "font-medium"}`}>
+                        <p className={`text-gray-900 dark:text-white truncate ${!msg.is_read ? "font-semibold" : "font-medium"}`}>
                           {msg.subject || "(ingen emne)"}
                         </p>
                       </div>
-                      <p className="text-sm text-gray-600 mt-0.5">Fra: {msg.sender}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Fra: {msg.sender}</p>
                       {msg.preview && (
-                        <p className="text-sm text-gray-400 truncate mt-1">
+                        <p className="text-sm text-gray-400 dark:text-gray-500 truncate mt-1">
                           {msg.preview.replace(/<[^>]*>/g, "")}
                         </p>
                       )}
                     </div>
                     <div className="flex flex-col items-end ml-4 gap-1">
-                      <time className="text-xs text-gray-400 whitespace-nowrap">
+                      <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                         {msg.timestamp ? new Date(msg.timestamp).toLocaleDateString("da-DK") : ""}
                       </time>
                       <button
                         onClick={(e) => !msg.is_read && markAsRead(e, msg)}
-                        className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full ${msg.is_read ? "bg-gray-100 text-gray-400 cursor-default" : "bg-blue-100 text-blue-700 font-medium hover:bg-blue-200 cursor-pointer"}`}
+                        className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full ${msg.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-300 cursor-default" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50 cursor-pointer"}`}
                         title={msg.is_read ? "Allerede læst" : "Markér som læst"}
                         disabled={msg.is_read}
                       >
@@ -745,12 +745,12 @@ export default function DashboardPage() {
 
           {/* Posts / Opslag tab */}
           {activeTab === "posts" && selectedPost && (
-            <div className="bg-white rounded-lg shadow mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900 mb-4">
               <div className="p-4 flex items-center justify-between">
-                <h3 className="font-medium text-gray-900">{selectedPost.title}</h3>
+                <h3 className="font-medium text-gray-900 dark:text-white">{selectedPost.title}</h3>
                 <button
                   onClick={() => setSelectedPost(null)}
-                  className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 transition leading-none"
+                  className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition leading-none"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
@@ -758,18 +758,18 @@ export default function DashboardPage() {
                   Tilbage
                 </button>
               </div>
-              <div className="mx-5"><hr className="border-gray-200" /></div>
+              <div className="mx-5"><hr className="border-gray-200 dark:border-gray-700" /></div>
               <div className="p-4">
                 <div className="flex justify-between items-center mb-3">
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
                     {selectedPost.sender} · {selectedPost.institution}
                   </span>
-                  <time className="text-xs text-gray-400">
+                  <time className="text-xs text-gray-400 dark:text-gray-500">
                     {new Date(selectedPost.timestamp).toLocaleString("da-DK")}
                   </time>
                 </div>
                 <div
-                  className="text-sm text-gray-700 prose prose-sm max-w-none"
+                  className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none"
                   dangerouslySetInnerHTML={{ __html: selectedPost.content }}
                 />
                 {selectedPost.attachments.length > 0 && (
@@ -780,9 +780,9 @@ export default function DashboardPage() {
                         href={att.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                        className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
                       >
-                        <span className="text-gray-400">📎</span>
+                        <span className="text-gray-400 dark:text-gray-500">📎</span>
                         {att.name}
                       </a>
                     ))}
@@ -793,19 +793,19 @@ export default function DashboardPage() {
           )}
 
           {activeTab === "posts" && !selectedPost && (
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900">
             {filteredPosts.length === 0 && (
-              <p className="p-4 text-gray-500">Ingen opslag</p>
+              <p className="p-4 text-gray-500 dark:text-gray-400">Ingen opslag</p>
             )}
             {filteredPosts.map((post, i) => (
               <div key={post.id}>
                 {i > 0 && (
                   <div className="mx-5">
-                    <hr className="border-gray-200" />
+                    <hr className="border-gray-200 dark:border-gray-700" />
                   </div>
                 )}
                 <div
-                  className={`p-4 cursor-pointer hover:bg-gray-50 transition ${!post.is_read ? "bg-blue-50" : ""} ${post.is_important ? "border-l-4 border-orange-400" : ""}`}
+                  className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${!post.is_read ? "bg-blue-50 dark:bg-blue-900/30" : ""} ${post.is_important ? "border-l-4 border-orange-400" : ""}`}
                   onClick={() => setSelectedPost(post)}
                 >
                   <div className="flex justify-between items-start">
@@ -815,28 +815,28 @@ export default function DashboardPage() {
                           <span className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
                         )}
                         {post.is_important && (
-                          <span className="text-orange-500 text-xs font-medium">⚠ Vigtigt</span>
+                          <span className="text-orange-500 dark:text-orange-400 text-xs font-medium">⚠ Vigtigt</span>
                         )}
-                        <p className={`text-gray-900 truncate ${!post.is_read ? "font-semibold" : "font-medium"}`}>
+                        <p className={`text-gray-900 dark:text-white truncate ${!post.is_read ? "font-semibold" : "font-medium"}`}>
                           {post.title}
                         </p>
                       </div>
-                      <p className="text-sm text-gray-600 mt-0.5">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
                         {post.sender} · {post.institution}
                       </p>
-                      <p className="text-sm text-gray-400 truncate mt-1">
+                      <p className="text-sm text-gray-400 dark:text-gray-500 truncate mt-1">
                         {post.content.replace(/<[^>]*>/g, "").slice(0, 100)}
                       </p>
                     </div>
                     <div className="flex flex-col items-end ml-4">
-                      <time className="text-xs text-gray-400 whitespace-nowrap">
+                      <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                         {post.timestamp ? new Date(post.timestamp).toLocaleDateString("da-DK") : ""}
                       </time>
-                      <span className={`text-xs mt-1 px-2 py-0.5 rounded-full ${post.is_read ? "bg-gray-100 text-gray-400" : "bg-blue-100 text-blue-700 font-medium"}`}>
+                      <span className={`text-xs mt-1 px-2 py-0.5 rounded-full ${post.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-300" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium"}`}>
                         {post.is_read ? "Læst" : "Ulæst"}
                       </span>
                       {post.attachments.length > 0 && (
-                        <span className="text-xs text-gray-400 mt-1">📎 {post.attachments.length}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 mt-1">📎 {post.attachments.length}</span>
                       )}
                     </div>
                   </div>
@@ -848,12 +848,12 @@ export default function DashboardPage() {
 
           {/* Vacation / Ferie tab */}
           {activeTab === "vacation" && selectedVacation && (
-            <div className="bg-white rounded-lg shadow mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900 mb-4">
               <div className="p-4 flex items-center justify-between">
-                <h3 className="font-medium text-gray-900">{selectedVacation.title} — {selectedVacation.child_name}</h3>
+                <h3 className="font-medium text-gray-900 dark:text-white">{selectedVacation.title} — {selectedVacation.child_name}</h3>
                 <button
                   onClick={() => setSelectedVacation(null)}
-                  className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 transition leading-none"
+                  className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition leading-none"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
@@ -861,14 +861,14 @@ export default function DashboardPage() {
                   Tilbage
                 </button>
               </div>
-              <div className="mx-5"><hr className="border-gray-200" /></div>
+              <div className="mx-5"><hr className="border-gray-200 dark:border-gray-700" /></div>
               <div className="p-4">
-                <p className="text-sm text-gray-600 mb-1">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                   {new Date(selectedVacation.start_date).toLocaleDateString("da-DK")} – {new Date(selectedVacation.end_date).toLocaleDateString("da-DK")}
                 </p>
-                <p className="text-sm text-gray-400 mb-4">Frist: {new Date(selectedVacation.deadline).toLocaleDateString("da-DK")}</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mb-4">Frist: {new Date(selectedVacation.deadline).toLocaleDateString("da-DK")}</p>
                 {selectedVacation.note && (
-                  <p className="text-sm text-gray-500 italic mb-4">{selectedVacation.note}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-4">{selectedVacation.note}</p>
                 )}
                 <div className="space-y-2">
                   {vacationDays.map((day, idx) => {
@@ -889,24 +889,24 @@ export default function DashboardPage() {
                     return (
                       <div key={day.date}>
                         {showWeekHeader && (
-                          <div className={`text-xs font-medium text-gray-400 uppercase tracking-wide ${idx > 0 ? "mt-3" : ""} mb-1`}>
+                          <div className={`text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide ${idx > 0 ? "mt-3" : ""} mb-1`}>
                             Uge {weekNum}
                           </div>
                         )}
-                        <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
-                          <span className="text-sm text-gray-700">
+                        <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                          <span className="text-sm text-gray-700 dark:text-gray-300">
                             {date.toLocaleDateString("da-DK", { weekday: "short", day: "numeric", month: "short" })}
                           </span>
                           <div className="flex gap-2">
                             <button
                               onClick={() => setVacationDays((prev) => prev.map((d, i) => i === idx ? { ...d, isComing: true } : d))}
-                              className={`text-xs px-3 py-1 rounded-full ${day.isComing ? "bg-green-600 text-white" : "bg-gray-200 text-gray-600"}`}
+                              className={`text-xs px-3 py-1 rounded-full ${day.isComing ? "bg-green-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
                             >
                               Kommer
                             </button>
                             <button
                               onClick={() => setVacationDays((prev) => prev.map((d, i) => i === idx ? { ...d, isComing: false } : d))}
-                              className={`text-xs px-3 py-1 rounded-full ${!day.isComing ? "bg-red-600 text-white" : "bg-gray-200 text-gray-600"}`}
+                              className={`text-xs px-3 py-1 rounded-full ${!day.isComing ? "bg-red-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
                             >
                               Fri
                             </button>
@@ -920,13 +920,13 @@ export default function DashboardPage() {
                   <div className="mt-4 flex gap-2">
                     <button
                       onClick={() => setVacationDays((prev) => prev.map((d) => ({ ...d, isComing: true })))}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200"
+                      className="text-xs px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
                     >
                       Alle kommer
                     </button>
                     <button
                       onClick={() => setVacationDays((prev) => prev.map((d) => ({ ...d, isComing: false })))}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
+                      className="text-xs px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50"
                     >
                       Alle fri
                     </button>
@@ -940,26 +940,26 @@ export default function DashboardPage() {
                   </div>
                 )}
                 {!selectedVacation.is_editable && (
-                  <p className="mt-4 text-sm text-gray-400 italic">Denne registrering kan ikke redigeres.</p>
+                  <p className="mt-4 text-sm text-gray-400 dark:text-gray-500 italic">Denne registrering kan ikke redigeres.</p>
                 )}
               </div>
             </div>
           )}
 
           {activeTab === "vacation" && !selectedVacation && (
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900">
             {filteredVacations.length === 0 && (
-              <p className="p-4 text-gray-500">Ingen ferieregistreringer</p>
+              <p className="p-4 text-gray-500 dark:text-gray-400">Ingen ferieregistreringer</p>
             )}
             {filteredVacations.map((vac, i) => (
               <div key={`${vac.id}-${vac.child_id}`}>
                 {i > 0 && (
                   <div className="mx-5">
-                    <hr className="border-gray-200" />
+                    <hr className="border-gray-200 dark:border-gray-700" />
                   </div>
                 )}
                 <div
-                  className={`p-4 cursor-pointer hover:bg-gray-50 transition ${vac.is_missing_answer ? "bg-yellow-50" : ""}`}
+                  className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${vac.is_missing_answer ? "bg-yellow-50 dark:bg-yellow-900/20" : ""}`}
                   onClick={() => openVacation(vac)}
                 >
                   <div className="flex justify-between items-start">
@@ -968,27 +968,27 @@ export default function DashboardPage() {
                         {vac.is_missing_answer && (
                           <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0" />
                         )}
-                        <p className={`text-gray-900 ${vac.is_missing_answer ? "font-semibold" : "font-medium"}`}>
+                        <p className={`text-gray-900 dark:text-white ${vac.is_missing_answer ? "font-semibold" : "font-medium"}`}>
                           {vac.title}
                         </p>
                       </div>
-                      <p className="text-sm text-gray-600 mt-0.5">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
                         {vac.child_name}
                       </p>
-                      <p className="text-sm text-gray-500 mt-1">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         {new Date(vac.start_date).toLocaleDateString("da-DK")} – {new Date(vac.end_date).toLocaleDateString("da-DK")}
                       </p>
                       {vac.note && (
-                        <p className="text-sm text-gray-400 mt-1 italic">
+                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-1 italic">
                           {vac.note}
                         </p>
                       )}
                     </div>
                     <div className="flex flex-col items-end ml-4">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${vac.is_missing_answer ? "bg-red-100 text-red-700 font-medium" : "bg-green-100 text-green-700"}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${vac.is_missing_answer ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium" : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"}`}>
                         {vac.is_missing_answer ? "Mangler svar" : "Besvaret"}
                       </span>
-                      <span className="text-xs text-gray-400 mt-1">
+                      <span className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                         Frist: {new Date(vac.deadline).toLocaleDateString("da-DK")}
                       </span>
                     </div>
@@ -1006,7 +1006,7 @@ export default function DashboardPage() {
           {toasts.map((toast) => (
             <div
               key={toast.id}
-              className={`px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-fade-in ${
+              className={`px-4 py-2 rounded-lg shadow-lg dark:shadow-gray-900 text-sm font-medium animate-fade-in ${
                 toast.type === "error"
                   ? "bg-red-600 text-white"
                   : "bg-green-600 text-white"
@@ -1020,4 +1020,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
