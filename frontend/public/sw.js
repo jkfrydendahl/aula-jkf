@@ -1,7 +1,7 @@
 // Service Worker for Aula PWA - handles push notifications
 
 self.addEventListener("push", (event) => {
-  const data = event.data?.json() ?? { title: "Aula", body: "Ny besked" };
+  const data = event.data?.json() ?? { title: "Aula JKF", body: "Ny besked" };
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,

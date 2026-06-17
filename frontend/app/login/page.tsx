@@ -64,7 +64,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
       <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900">
         <div>
-          <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white">Aula</h1>
+          <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white">Aula JKF</h1>
           <p className="mt-2 text-center text-gray-600 dark:text-gray-400">Log ind med MitID</p>
         </div>
 

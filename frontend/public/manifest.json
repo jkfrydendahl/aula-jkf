@@ -1,7 +1,7 @@
 {
-  "name": "Aula PWA",
-  "short_name": "Aula",
-  "description": "Aula - se beskeder, fravær og skema",
+  "name": "Aula JKF",
+  "short_name": "Aula JKF",
+  "description": "Aula JKF - se beskeder, fravær og skema",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#111827",

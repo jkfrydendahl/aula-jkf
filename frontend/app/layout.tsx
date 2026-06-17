@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aula",
-  description: "Aula - beskeder, fravær og skema",
+  title: "Aula JKF",
+  description: "Aula JKF - beskeder, fravær og skema",
   manifest: "/manifest.json",
 };
 
@@ -39,7 +39,7 @@ export default function RootLayout({
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Aula" />
+        <meta name="apple-mobile-web-app-title" content="Aula JKF" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
