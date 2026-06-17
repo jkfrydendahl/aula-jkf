@@ -241,6 +241,21 @@ export const api = {
     }),
   getCalendar: (childId: string) => request<CalendarEvent[]>(`/calendar/${childId}`),
 
+  // Push notifications
+  pushSubscribe: (subscription: PushSubscriptionJSON) =>
+    request<{ status: string }>("/push/subscribe", {
+      method: "POST",
+      body: JSON.stringify({
+        endpoint: subscription.endpoint,
+        keys: subscription.keys,
+      }),
+    }),
+  pushUnsubscribe: (endpoint: string) =>
+    request<{ status: string }>("/push/unsubscribe", {
+      method: "POST",
+      body: JSON.stringify({ endpoint }),
+    }),
+
   // Actions
   sendMessage: (recipientId: string, subject: string, text: string) =>
     request<{ success: boolean }>("/messages/send", {

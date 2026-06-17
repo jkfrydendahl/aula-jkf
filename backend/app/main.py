@@ -4,6 +4,7 @@ import logging
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.settings import AppAuthSettings, Settings
 from app.aula_client import AulaClient
@@ -173,6 +174,23 @@ def create_app(
         create_push_router(push_service),
         dependencies=[Depends(require_app_auth)],
     )
+
+    # Background poller — only runs if VAPID keys are configured
+    if settings.vapid_private_key:
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(
+            poller.tick,
+            "interval",
+            seconds=settings.poll_interval,
+            id="aula_poller",
+            replace_existing=True,
+        )
+        scheduler.start()
+        _LOGGER.info(f"Background poller started (interval: {settings.poll_interval}s)")
+
+        @app.on_event("shutdown")
+        def shutdown_scheduler():
+            scheduler.shutdown(wait=False)
 
     return app
 

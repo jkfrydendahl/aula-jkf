@@ -337,6 +337,30 @@ export default function DashboardPage() {
     }
   }
 
+  async function enableNotifications() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      showToast("Push notifikationer understøttes ikke i denne browser", "error");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      showToast("Notifikationer blev ikke tilladt", "error");
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey,
+      });
+      await api.pushSubscribe(sub.toJSON() as PushSubscriptionJSON);
+      showToast("Notifikationer aktiveret");
+    } catch {
+      showToast("Kunne ikke aktivere notifikationer", "error");
+    }
+  }
+
   const filteredMessages = childFilter === "all"
     ? messages
     : messages.filter((msg) =>
@@ -406,12 +430,21 @@ export default function DashboardPage() {
       <header className="max-w-4xl mx-auto mb-8">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Aula Dashboard</h1>
-          <button
-            onClick={logoutAppAuth}
-            className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline underline-offset-2"
-          >
-            LOG UD
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={enableNotifications}
+              title="Aktiver notifikationer"
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+            >
+              🔔
+            </button>
+            <button
+              onClick={logoutAppAuth}
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline underline-offset-2"
+            >
+              LOG UD
+            </button>
+          </div>
         </div>
       </header>
 
