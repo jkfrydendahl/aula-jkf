@@ -234,7 +234,7 @@ class AulaService:
             return []
 
         registrations = []
-        for child_entry in raw_data:
+        for child_entry in (raw_data or []):
             child = child_entry.get("child", {})
             child_name = child.get("name", "Ukendt")
             child_id = str(child.get("id", ""))
