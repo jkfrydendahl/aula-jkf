@@ -338,7 +338,9 @@ export default function DashboardPage() {
       return;
     }
     if (Notification.permission === "denied") {
-      showToast("Notifikationer er blokeret — aktiver dem i browser-/systemindstillinger", "error");
+      // On iOS PWA: Settings → Aula JKF → Notifications
+      // On desktop: click the lock icon in the address bar
+      showToast("Notifikationer er blokeret — aktiver dem i Indstillinger → Aula JKF → Notifikationer", "error");
       return;
     }
     const permission = await Notification.requestPermission();
@@ -354,11 +356,13 @@ export default function DashboardPage() {
         applicationServerKey: vapidKey,
       });
       await api.pushSubscribe(sub.toJSON() as PushSubscriptionJSON);
-      showToast("Notifikationer aktiveret");
+      showToast("Notifikationer aktiveret ✓");
     } catch {
       showToast("Kunne ikke aktivere notifikationer", "error");
     }
   }
+
+  const notifPermission = typeof Notification !== "undefined" ? Notification.permission : "default";
 
   const filteredMessages = childFilter === "all"
     ? messages
@@ -432,10 +436,10 @@ export default function DashboardPage() {
           <div className="flex items-center gap-4">
             <button
               onClick={enableNotifications}
-              title="Aktiver notifikationer"
+              title={notifPermission === "granted" ? "Notifikationer aktiveret" : notifPermission === "denied" ? "Notifikationer blokeret — se Indstillinger" : "Aktiver notifikationer"}
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
             >
-              🔔
+              {notifPermission === "granted" ? "🔔" : notifPermission === "denied" ? "🔕" : "🔔"}
             </button>
             <button
               onClick={logoutAppAuth}
