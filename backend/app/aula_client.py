@@ -313,7 +313,7 @@ class AulaClient:
             headers=headers,
             verify=True,
         )
-        _LOGGER.info(f"updateSubscriptionStatus [{sid}]: {res.status_code} {res.text[:200]}")
+        _LOGGER.debug(f"updateSubscriptionStatus [{sid}]: {res.status_code}")
         if res.status_code == 200:
             data = res.json()
             return (data.get("status") or {}).get("message") == "OK"
