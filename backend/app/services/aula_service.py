@@ -144,7 +144,7 @@ class AulaService:
         try:
             threads = self._client.get_message_threads(page=0)
         except Exception as e:
-            _LOGGER.warning(f"Failed to fetch message threads: {e}")
+            _LOGGER.warning(f"Failed to fetch message threads: {e}", exc_info=True)
             return []
 
         messages = []
