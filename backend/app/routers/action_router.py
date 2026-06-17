@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
 
+from app.dependencies.app_auth import get_aula_service
 from app.services.aula_service import AulaService
 
 
@@ -31,11 +32,14 @@ class UpdatePresenceTemplateRequest(BaseModel):
     comment: Optional[str] = None
 
 
-def create_action_router(aula_service: AulaService) -> APIRouter:
+def create_action_router() -> APIRouter:
     router = APIRouter(tags=["actions"])
 
     @router.post("/messages/send")
-    def send_message(request: SendMessageRequest):
+    def send_message(
+        request: SendMessageRequest,
+        aula_service: AulaService = Depends(get_aula_service),
+    ):
         return aula_service.send_message(
             recipient_id=request.recipient_id,
             subject=request.subject,
@@ -43,29 +47,44 @@ def create_action_router(aula_service: AulaService) -> APIRouter:
         )
 
     @router.post("/presence/update")
-    def update_presence(request: UpdatePresenceRequest):
+    def update_presence(
+        request: UpdatePresenceRequest,
+        aula_service: AulaService = Depends(get_aula_service),
+    ):
         return aula_service.update_presence(
             child_id=request.child_id,
             status=request.status,
         )
 
     @router.post("/presence/sick")
-    def update_sick_status(request: UpdateSickRequest):
+    def update_sick_status(
+        request: UpdateSickRequest,
+        aula_service: AulaService = Depends(get_aula_service),
+    ):
         return aula_service.update_sick_status(
             child_id=request.child_id,
             is_sick=request.is_sick,
         )
 
     @router.get("/presence/{child_id}/pickup-responsibles")
-    def get_pickup_responsibles(child_id: str):
+    def get_pickup_responsibles(
+        child_id: str,
+        aula_service: AulaService = Depends(get_aula_service),
+    ):
         return aula_service.get_pickup_responsibles(child_id)
 
     @router.get("/presence/{child_id}/go-home-with-list")
-    def get_go_home_with_list(child_id: str):
+    def get_go_home_with_list(
+        child_id: str,
+        aula_service: AulaService = Depends(get_aula_service),
+    ):
         return aula_service.get_go_home_with_list(child_id)
 
     @router.post("/presence/update-template")
-    def update_presence_template(request: UpdatePresenceTemplateRequest):
+    def update_presence_template(
+        request: UpdatePresenceTemplateRequest,
+        aula_service: AulaService = Depends(get_aula_service),
+    ):
         return aula_service.update_presence_template(
             child_id=request.child_id,
             date=request.date,

@@ -1,12 +1,13 @@
-import uuid
 import threading
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.dependencies.app_auth import require_app_auth
 from app.models.schemas import AuthFlowStatus
 from app.repositories.token_repository import FileTokenRepository
+from app.settings import Settings
 from app.services.auth_service import AuthService
 from app.routers.auth_router import create_auth_router
 
@@ -15,8 +16,10 @@ def _build_test_app(auth_service):
     """Create a FastAPI test app with auth router wired to the given service."""
     from fastapi import FastAPI
     app = FastAPI()
-    router = create_auth_router(auth_service)
-    app.include_router(router)
+    app.state.settings = Settings()
+    app.state.user_registry = {"default": {"auth_service": auth_service}}
+    app.dependency_overrides[require_app_auth] = lambda: "default"
+    app.include_router(create_auth_router())
     return app
 
 

@@ -24,8 +24,7 @@ def _build_app_with_middleware(token_repo, renew_fn=None):
 
     app.add_middleware(
         TokenRefreshMiddleware,
-        token_repository=token_repo,
-        renew_token_fn=renew_fn,
+        get_user_context_fn=lambda _request: (token_repo, renew_fn),
     )
 
     return app

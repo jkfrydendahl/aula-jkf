@@ -1,36 +1,22 @@
 """Scenarios 8-12: Read API endpoints."""
-import time
 from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.models.schemas import TokenData
-from app.repositories.token_repository import FileTokenRepository
+from app.dependencies.app_auth import require_app_auth
 from app.routers.data_router import create_data_router
 from app.services.aula_service import AulaService
 
 
-def _build_test_app(aula_service, token_repo):
-    """Create test app with data router and valid tokens."""
+def _build_test_app(aula_service):
+    """Create test app with data router and injected Aula service."""
     app = FastAPI()
-    router = create_data_router(aula_service)
-    app.include_router(router)
-
-    # Save valid token so middleware isn't needed for these focused tests
-    token_repo.save(TokenData(
-        access_token="valid",
-        refresh_token="valid",
-        expires_at=time.time() + 3600,
-    ))
-
+    app.state.user_registry = {"default": {"aula_service": aula_service}}
+    app.dependency_overrides[require_app_auth] = lambda: "default"
+    app.include_router(create_data_router())
     return app
-
-
-@pytest.fixture
-def token_repo(tmp_path):
-    return FileTokenRepository(str(tmp_path / "tokens.json"))
 
 
 @pytest.fixture
@@ -62,8 +48,8 @@ def mock_aula_service():
 class TestGetChildren:
     """Scenario 8: GET /children."""
 
-    def test_returns_child_list(self, token_repo, mock_aula_service):
-        app = _build_test_app(mock_aula_service, token_repo)
+    def test_returns_child_list(self, mock_aula_service):
+        app = _build_test_app(mock_aula_service)
         client = TestClient(app)
 
         resp = client.get("/children")
@@ -78,8 +64,8 @@ class TestGetChildren:
 class TestGetPresence:
     """Scenario 9: GET /presence/{child_id}."""
 
-    def test_returns_presence_details(self, token_repo, mock_aula_service):
-        app = _build_test_app(mock_aula_service, token_repo)
+    def test_returns_presence_details(self, mock_aula_service):
+        app = _build_test_app(mock_aula_service)
         client = TestClient(app)
 
         resp = client.get("/presence/child-1")
@@ -93,8 +79,8 @@ class TestGetPresence:
 class TestGetMessages:
     """Scenario 10: GET /messages."""
 
-    def test_returns_messages(self, token_repo, mock_aula_service):
-        app = _build_test_app(mock_aula_service, token_repo)
+    def test_returns_messages(self, mock_aula_service):
+        app = _build_test_app(mock_aula_service)
         client = TestClient(app)
 
         resp = client.get("/messages")
@@ -109,8 +95,8 @@ class TestGetMessages:
 class TestGetCalendar:
     """Scenario 11: GET /calendar/{child_id}."""
 
-    def test_returns_calendar_events(self, token_repo, mock_aula_service):
-        app = _build_test_app(mock_aula_service, token_repo)
+    def test_returns_calendar_events(self, mock_aula_service):
+        app = _build_test_app(mock_aula_service)
         client = TestClient(app)
 
         resp = client.get("/calendar/child-1")
@@ -125,8 +111,8 @@ class TestGetCalendar:
 class TestGetUgeplan:
     """Scenario 12: GET /ugeplan/{child_id}."""
 
-    def test_returns_weekly_plan(self, token_repo, mock_aula_service):
-        app = _build_test_app(mock_aula_service, token_repo)
+    def test_returns_weekly_plan(self, mock_aula_service):
+        app = _build_test_app(mock_aula_service)
         client = TestClient(app)
 
         resp = client.get("/ugeplan/child-1")

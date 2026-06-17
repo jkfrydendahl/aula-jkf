@@ -3,7 +3,6 @@ import logging
 from typing import Callable, Optional
 
 from fastapi import Request
-from fastapi.responses import JSONResponse
 
 from app.models.schemas import TokenData
 from app.repositories.token_repository import TokenRepository
@@ -23,12 +22,10 @@ class TokenRefreshMiddleware:
     def __init__(
         self,
         app,
-        token_repository: TokenRepository,
-        renew_token_fn: Optional[Callable[[str], TokenData]] = None,
+        get_user_context_fn: Callable[[Request], tuple[TokenRepository, Optional[Callable[[str], TokenData]]] | None],
     ):
         self.app = app
-        self._token_repository = token_repository
-        self._renew_token_fn = renew_token_fn
+        self._get_user_context_fn = get_user_context_fn
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -45,7 +42,13 @@ class TokenRefreshMiddleware:
             await self.app(scope, receive, send)
             return
 
-        tokens = self._token_repository.load()
+        user_context = self._get_user_context_fn(request)
+        if user_context is None:
+            await self.app(scope, receive, send)
+            return
+
+        token_repository, renew_token_fn = user_context
+        tokens = token_repository.load()
 
         # No tokens at all — require auth
         if tokens is None:
@@ -61,7 +64,7 @@ class TokenRefreshMiddleware:
 
         if time_until_expiry < TOKEN_REFRESH_THRESHOLD:
             # Try to refresh
-            if self._renew_token_fn is None:
+            if renew_token_fn is None:
                 response = StarletteJSONResponse(
                     status_code=401,
                     content={"detail": "Token expired, no renewal available", "re_auth_required": True},
@@ -69,8 +72,8 @@ class TokenRefreshMiddleware:
                 await response(scope, receive, send)
                 return
             try:
-                new_tokens = self._renew_token_fn(tokens.refresh_token)
-                self._token_repository.save(new_tokens)
+                new_tokens = renew_token_fn(tokens.refresh_token)
+                token_repository.save(new_tokens)
             except Exception as e:
                 _LOGGER.warning(f"Token refresh failed: {e}")
                 response = StarletteJSONResponse(

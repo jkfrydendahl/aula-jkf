@@ -1,21 +1,20 @@
 """Scenarios 13-14: Write operation endpoints."""
-import time
 from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.models.schemas import TokenData
-from app.repositories.token_repository import FileTokenRepository
+from app.dependencies.app_auth import require_app_auth
 from app.routers.action_router import create_action_router
 from app.services.aula_service import AulaService
 
 
 def _build_test_app(aula_service):
     app = FastAPI()
-    router = create_action_router(aula_service)
-    app.include_router(router)
+    app.state.user_registry = {"default": {"aula_service": aula_service}}
+    app.dependency_overrides[require_app_auth] = lambda: "default"
+    app.include_router(create_action_router())
     return app
 
 

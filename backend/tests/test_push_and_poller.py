@@ -1,11 +1,11 @@
 """Scenarios 15-17: Background poller and push notifications."""
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.dependencies.app_auth import require_app_auth
 from app.repositories.push_repository import FilePushRepository, PushSubscription
 from app.services.push_service import PushService
 from app.services.background_poller import BackgroundPoller
@@ -104,7 +104,9 @@ class TestPushSubscribeUnsubscribe:
             vapid_claim_email="test@example.com",
         )
         app = FastAPI()
-        app.include_router(create_push_router(push_service))
+        app.state.user_registry = {"default": {"push_service": push_service}}
+        app.dependency_overrides[require_app_auth] = lambda: "default"
+        app.include_router(create_push_router())
         client = TestClient(app)
 
         resp = client.post("/push/subscribe", json={
@@ -127,7 +129,9 @@ class TestPushSubscribeUnsubscribe:
         ))
 
         app = FastAPI()
-        app.include_router(create_push_router(push_service))
+        app.state.user_registry = {"default": {"push_service": push_service}}
+        app.dependency_overrides[require_app_auth] = lambda: "default"
+        app.include_router(create_push_router())
         client = TestClient(app)
 
         resp = client.post("/push/unsubscribe", json={

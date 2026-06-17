@@ -8,6 +8,7 @@ from app.session_utils import create_session_token, verify_session_token
 
 
 class LoginRequest(BaseModel):
+    username: str
     password: str
 
 
@@ -21,11 +22,29 @@ def create_app_auth_router() -> APIRouter:
         if not settings.auth_enabled:
             return {"authenticated": True}
 
-        if not secrets.compare_digest(payload.password, settings.auth_password):
-            raise HTTPException(status_code=401, detail="Invalid password")
+        users = settings.get_users()
+        user = None
+        if len(users) == 1 and users[0].user_id == "default" and users[0].name == "":
+            candidate = users[0]
+            if secrets.compare_digest(payload.password, candidate.password):
+                user = candidate
+        else:
+            normalized_username = payload.username.strip().lower()
+            for candidate in users:
+                if candidate.name.lower() != normalized_username:
+                    continue
+                if secrets.compare_digest(payload.password, candidate.password):
+                    user = candidate
+                    break
 
-        secret = settings.session_secret or settings.auth_password
-        token = create_session_token(secret=secret, ttl_seconds=settings.session_ttl_seconds)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        token = create_session_token(
+            secret=settings.session_secret,
+            user_id=user.user_id,
+            ttl_seconds=settings.session_ttl_seconds,
+        )
 
         response = JSONResponse(content={"authenticated": True})
         secure = settings.session_secure_cookie
@@ -60,18 +79,32 @@ def create_app_auth_router() -> APIRouter:
     async def app_me(request: Request):
         settings = request.app.state.app_auth_settings
         if not settings.auth_enabled:
-            return {"authenticated": True}
+            users = settings.get_users()
+            username = users[0].name if users else None
+            return {"authenticated": True, "username": username}
 
         token = request.cookies.get(settings.session_cookie_name)
-        secret = settings.session_secret or settings.auth_password
+        secret = settings.session_secret
         if not token or not secret:
             return {"authenticated": False}
 
-        is_valid = verify_session_token(
+        user_id = verify_session_token(
             token=token,
             secret=secret,
             max_age=settings.session_ttl_seconds,
         )
-        return {"authenticated": is_valid}
+        if user_id is None:
+            return {"authenticated": False}
+
+        user = next((candidate for candidate in settings.get_users() if candidate.user_id == user_id), None)
+        if user is None:
+            return {"authenticated": False}
+        return {"authenticated": True, "username": user.name}
+
+    @router.get("/users")
+    async def app_users(request: Request):
+        settings = request.app.state.app_auth_settings
+        users = settings.get_users()
+        return [{"user_id": user.user_id, "name": user.name} for user in users]
 
     return router

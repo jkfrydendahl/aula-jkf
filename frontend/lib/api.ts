@@ -165,12 +165,15 @@ export interface VacationRegistration {
 // Auth
 export const api = {
   appAuthMe: () =>
-    request<{ authenticated: boolean }>("/app-auth/me", { noRedirectOn401: true }),
+    request<{ authenticated: boolean; username?: string }>("/app-auth/me", { noRedirectOn401: true }),
 
-  appAuthLogin: (password: string) =>
+  appAuthUsers: () =>
+    request<{ user_id: string; name: string }[]>("/app-auth/users", { noRedirectOn401: true }),
+
+  appAuthLogin: (username: string, password: string) =>
     request<{ authenticated: boolean }>("/app-auth/login", {
       method: "POST",
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password }),
       noRedirectOn401: true,
     }),
 
