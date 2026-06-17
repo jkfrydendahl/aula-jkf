@@ -774,7 +774,7 @@ export default function DashboardPage() {
                       </time>
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleReadStatus(msg); }}
-                        className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full transition ${msg.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 hover:text-yellow-700 dark:hover:text-yellow-300" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-500 dark:hover:text-gray-400"}`}
+                        className={`text-xs whitespace-nowrap px-2 py-0.5 rounded-full transition ${msg.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-600 dark:hover:text-gray-300" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-500 dark:hover:text-gray-400"}`}
                         title={msg.is_read ? "Markér som ulæst" : "Markér som læst"}
                       >
                         {msg.is_read ? "Læst" : "Ulæst"}
