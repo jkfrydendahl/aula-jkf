@@ -132,18 +132,6 @@ export default function LoginPage() {
             <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
           </div>
         )}
-
-        <div className="text-center pt-2">
-          <button
-            onClick={async () => {
-              await api.appAuthLogout().catch(() => {});
-              window.location.href = "/";
-            }}
-            className="text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition"
-          >
-            ← Skift bruger
-          </button>
-        </div>
       </div>
     </div>
   );
