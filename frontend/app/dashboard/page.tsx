@@ -105,6 +105,14 @@ export default function DashboardPage() {
           try {
             setPresence(await fetchPresenceMap(children));
           } catch { /* ignore */ }
+          try {
+            const [messagesData, postsData] = await Promise.all([
+              api.getMessages(),
+              api.getPosts(),
+            ]);
+            setMessages(messagesData);
+            setPosts(postsData);
+          } catch { /* ignore */ }
         })();
       }
     }
