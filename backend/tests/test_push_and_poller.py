@@ -22,21 +22,21 @@ class TestPollerDetectsNewMessage:
 
     def test_sends_push_on_new_unread(self, push_repo):
         mock_aula_service = MagicMock()
-        mock_aula_service.get_unread_count.return_value = 3  # New count
+        mock_aula_service.get_new_item_counts.return_value = {"messages": 3, "posts": 0, "vacations": 0}
 
         mock_push_service = MagicMock()
 
         poller = BackgroundPoller(
             aula_service=mock_aula_service,
             push_service=mock_push_service,
-            previous_unread_count=1,  # Old count was 1
         )
+        poller._previous_counts = {"messages": 1, "posts": 0, "vacations": 0}
 
         poller.tick()
 
         mock_push_service.send_notification.assert_called_once()
         call_args = mock_push_service.send_notification.call_args
-        assert "new" in call_args[1]["title"].lower() or "message" in call_args[1]["title"].lower()
+        assert "nye" in call_args[1]["title"].lower() or "besked" in call_args[1]["title"].lower()
 
 
 class TestPollerNoNewMessages:
@@ -44,15 +44,15 @@ class TestPollerNoNewMessages:
 
     def test_no_push_when_count_unchanged(self, push_repo):
         mock_aula_service = MagicMock()
-        mock_aula_service.get_unread_count.return_value = 2  # Same as before
+        mock_aula_service.get_new_item_counts.return_value = {"messages": 2, "posts": 0, "vacations": 0}
 
         mock_push_service = MagicMock()
 
         poller = BackgroundPoller(
             aula_service=mock_aula_service,
             push_service=mock_push_service,
-            previous_unread_count=2,  # Same
         )
+        poller._previous_counts = {"messages": 2, "posts": 0, "vacations": 0}
 
         poller.tick()
 

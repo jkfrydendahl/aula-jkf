@@ -516,3 +516,48 @@ class AulaService:
             )
         except Exception as e:
             _LOGGER.warning(f"refresh_messages failed: {e}")
+
+    def refresh_all(self) -> None:
+        """Fetch fresh data for all event types (messages, posts, vacation)."""
+        self.refresh_messages()
+        try:
+            self.ensure_data_loaded()
+            self._client.get_posts(index=0, limit=20)
+            self._client.get_vacation_registrations()
+        except Exception as e:
+            _LOGGER.warning(f"refresh_all partial failure: {e}")
+
+    def get_new_item_counts(self) -> dict[str, int]:
+        """Return counts of new/unread items across all event types."""
+        try:
+            threads = self._client._threads or []
+            unread_messages = sum(1 for t in threads if not t.get("read", True))
+        except Exception:
+            unread_messages = self._client.unread_messages
+
+        try:
+            result = self._client.get_posts(index=0, limit=20)
+            raw_posts = result.get("posts", [])
+            last_seen = result.get("profileLastSeenPostDate", "")
+            unread_posts = sum(
+                1 for p in raw_posts
+                if not (last_seen and (p.get("publishAt") or p.get("timestamp", "")) <= last_seen)
+            )
+        except Exception:
+            unread_posts = 0
+
+        try:
+            raw_vacation = self._client.get_vacation_registrations() or []
+            pending_vacations = sum(
+                1 for child_entry in raw_vacation
+                for reg in child_entry.get("vacationRegistrations", [])
+                if reg.get("isMissingAnswer", False)
+            )
+        except Exception:
+            pending_vacations = 0
+
+        return {
+            "messages": unread_messages,
+            "posts": unread_posts,
+            "vacations": pending_vacations,
+        }
