@@ -591,3 +591,32 @@ class AulaService:
             "posts": unread_posts,
             "vacations": pending_vacations,
         }
+
+    def get_pickup_states(self) -> dict[str, dict]:
+        """Return pickup state for each child.
+
+        Returns:
+            {child_id: {"activity_type": int, "exit_with": str}}
+            activity_type: 0=hentes af, 1=selvbestemmer, 2=send hjem, 3=gå hjem med
+        """
+        self._ensure_tokens_loaded()
+        states: dict[str, dict] = {}
+        for child in self._client._children:
+            child_id = str(child["id"])
+            try:
+                overview = self._client.get_daily_overview(int(child_id))
+                if overview:
+                    states[child_id] = {
+                        "activity_type": overview.get("activityType", 0),
+                        "exit_with": overview.get("exitWith") or "",
+                    }
+            except Exception as e:
+                _LOGGER.warning(f"get_pickup_states failed for child {child_id}: {e}")
+        return states
+
+    def get_child_name(self, child_id: str) -> str:
+        """Return the display name for a child by ID, falling back to the ID itself."""
+        for child in self._client._children:
+            if str(child["id"]) == str(child_id):
+                return child.get("name", child_id)
+        return child_id
