@@ -34,7 +34,7 @@ process.stdin.on("end", () => {
   const { endpoint, keys, title, body, vapid_public_key, vapid_private_key, vapid_email } = payload;
 
   webpush.setVapidDetails(
-    `mailto:${vapid_email}`,
+    vapid_email.startsWith("mailto:") ? vapid_email : `mailto:${vapid_email}`,
     vapid_public_key,
     vapid_private_key
   );
