@@ -209,6 +209,13 @@ export default function DashboardPage() {
     }
   }
 
+  async function markAllPostsRead() {
+    const unread = posts.filter((p) => !p.is_read);
+    if (unread.length === 0) return;
+    setPosts((prev) => prev.map((p) => ({ ...p, is_read: true })));
+    await Promise.allSettled(unread.map((p) => api.markPostRead(p.id)));
+  }
+
   async function openVacation(vac: VacationRegistration) {
     setSelectedVacation(vac);
     // Generate weekdays between start and end
@@ -898,6 +905,7 @@ export default function DashboardPage() {
           )}
 
           {activeTab === "posts" && !selectedPost && (
+          <>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900">
             {filteredPosts.length === 0 && (
               <p className="p-4 text-gray-500 dark:text-gray-400">Ingen opslag</p>
@@ -959,6 +967,17 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+          {posts.some((p) => !p.is_read) && (
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={markAllPostsRead}
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-2"
+              >
+                Markér alle som læst
+              </button>
+            </div>
+          )}
+          </>
           )}
 
           {/* Vacation / Ferie tab */}
