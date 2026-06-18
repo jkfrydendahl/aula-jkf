@@ -16,6 +16,7 @@ class BackgroundPoller:
         try:
             self._aula_service.refresh_all()
             current_counts = self._aula_service.get_new_item_counts()
+            _LOGGER.info(f"Poll tick: counts={current_counts}, previous={self._previous_counts}")
 
             # Posts count is a delta (new since last check) — fire if any new.
             # Messages and vacations are totals — fire if they increased.

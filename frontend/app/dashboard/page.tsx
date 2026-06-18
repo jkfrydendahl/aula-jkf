@@ -709,9 +709,9 @@ export default function DashboardPage() {
                 className={`inline-flex items-center text-lg font-semibold ${activeTab === "posts" ? "text-gray-900 dark:text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"}`}
               >
                 <span className={activeTab === "posts" ? "underline underline-offset-4" : ""}>Opslag</span>
-                {posts.filter((p) => !p.is_read && p.is_important).length > 0 && (
+                {posts.filter((p) => !p.is_read).length > 0 && (
                   <span className="ml-2 px-2 py-0.5 text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-full">
-                    {posts.filter((p) => !p.is_read && p.is_important).length} vigtige ulæste
+                    {posts.filter((p) => !p.is_read).length}
                   </span>
                 )}
               </button>
