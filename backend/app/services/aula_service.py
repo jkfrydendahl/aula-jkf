@@ -542,11 +542,10 @@ class AulaService:
             _LOGGER.warning(f"refresh_messages failed: {e}")
 
     def refresh_all(self) -> None:
-        """Fetch fresh data for all event types (messages, posts, vacation)."""
+        """Fetch fresh data for all event types (messages, vacation)."""
         self.refresh_messages()
         try:
             self.ensure_data_loaded()
-            self._client.get_posts(index=0, limit=20)
             self._client.get_vacation_registrations()
         except Exception as e:
             _LOGGER.warning(f"refresh_all partial failure: {e}")

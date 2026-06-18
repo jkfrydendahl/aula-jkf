@@ -17,17 +17,29 @@ class BackgroundPoller:
             self._aula_service.refresh_all()
             current_counts = self._aula_service.get_new_item_counts()
 
-            total_previous = sum(self._previous_counts.values())
-            total_current = sum(current_counts.values())
+            # Posts count is a delta (new since last check) — fire if any new.
+            # Messages and vacations are totals — fire if they increased.
+            new_posts = current_counts.get("posts", 0)
+            messages_increased = current_counts.get("messages", 0) > self._previous_counts.get("messages", 0)
+            vacations_increased = current_counts.get("vacations", 0) > self._previous_counts.get("vacations", 0)
 
-            if total_current > total_previous:
-                new_count = total_current - total_previous
+            if new_posts > 0 or messages_increased or vacations_increased:
+                new_count = new_posts + (
+                    max(0, current_counts.get("messages", 0) - self._previous_counts.get("messages", 0))
+                ) + (
+                    max(0, current_counts.get("vacations", 0) - self._previous_counts.get("vacations", 0))
+                )
                 self._push_service.send_notification(
                     title="Ny besked i Aula" if new_count == 1 else f"{new_count} nye beskeder i Aula",
                     body="Tryk for at åbne",
                 )
 
-            self._previous_counts = current_counts
+            # Store totals for messages/vacations; posts delta resets automatically.
+            self._previous_counts = {
+                "messages": current_counts.get("messages", 0),
+                "posts": 0,
+                "vacations": current_counts.get("vacations", 0),
+            }
 
         except Exception as e:
             _LOGGER.error(f"Background poll failed: {e}")
