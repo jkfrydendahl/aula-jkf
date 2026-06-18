@@ -32,11 +32,20 @@ class PushService:
     def _send_to_subscriber(self, sub: PushSubscription, title: str, body: str) -> None:
         """Send to a single subscriber using pywebpush."""
         import json
+        from urllib.parse import urlparse
         from pywebpush import webpush
+
+        # Apple Web Push requires `aud` set to the push service origin explicitly
+        parsed = urlparse(sub.endpoint)
+        endpoint_origin = f"{parsed.scheme}://{parsed.netloc}"
+        vapid_claims = {
+            "sub": f"mailto:{self._vapid_claim_email}",
+            "aud": endpoint_origin,
+        }
 
         webpush(
             subscription_info={"endpoint": sub.endpoint, "keys": sub.keys},
             data=json.dumps({"title": title, "body": body}),
             vapid_private_key=self._vapid_private_key,
-            vapid_claims={"sub": f"mailto:{self._vapid_claim_email}"},
+            vapid_claims=vapid_claims,
         )
