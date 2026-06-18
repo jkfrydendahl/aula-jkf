@@ -28,6 +28,8 @@ class AulaService:
         # _user_read_post_ids: posts the user has explicitly opened in our app.
         self._seen_post_ids: set[str] | None = None
         self._user_read_post_ids: set[str] = set()
+        # Pickup states we've set ourselves — suppresses spurious poller notifications.
+        self._known_pickup_states: dict[str, dict] = {}
 
     def _ensure_tokens_loaded(self):
         """Reload tokens from repository into client if missing or stale."""
@@ -523,6 +525,13 @@ class AulaService:
         )
 
         success = result.get("status", {}).get("message") == "OK"
+        if success:
+            # Update our known pickup state so the poller doesn't fire a
+            # spurious "pickup changed" notification for our own change.
+            self._known_pickup_states[str(child_id)] = {
+                "activity_type": activity_type,
+                "exit_with": exit_with or "",
+            }
         return {"success": success, "data": result}
 
     def get_unread_count(self) -> int:
