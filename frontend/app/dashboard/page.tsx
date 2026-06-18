@@ -896,7 +896,14 @@ export default function DashboardPage() {
                 )}
                 <div
                   className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${!post.is_read ? "bg-blue-50 dark:bg-blue-900/30" : ""} ${post.is_important ? "border-l-4 border-orange-400" : ""}`}
-                  onClick={() => setSelectedPost(post)}
+                  onClick={() => {
+                    setSelectedPost(post);
+                    if (!post.is_read) {
+                      // Mark as read locally and notify the backend.
+                      setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, is_read: true } : p));
+                      api.markPostRead(post.id).catch(() => {/* fire-and-forget */});
+                    }
+                  }}
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0">

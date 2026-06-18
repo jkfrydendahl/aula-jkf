@@ -22,6 +22,12 @@ class AulaService:
         self._load_lock = threading.Lock()
         self._thread_cache: dict[int, tuple[dict, float]] = {}
         self._subscription_id_cache: dict[str, int] = {}
+        # Post read-state tracking (in-memory; no Aula API equivalent for posts).
+        # _seen_post_ids: used by the poller to detect genuinely *new* posts.
+        #   None = uninitialized (first poll seeds baseline, returns 0 new posts).
+        # _user_read_post_ids: posts the user has explicitly opened in our app.
+        self._seen_post_ids: set[str] | None = None
+        self._user_read_post_ids: set[str] = set()
 
     def _ensure_tokens_loaded(self):
         """Reload tokens from repository into client if missing or stale."""
@@ -184,11 +190,17 @@ class AulaService:
         return messages
 
     def get_posts(self) -> list[dict[str, Any]]:
-        """Return recent posts/opslag."""
+        """Return recent posts/opslag.
+
+        is_read is tracked locally: a post is considered read only after the user
+        has explicitly opened it in our app (see mark_post_read).  We do NOT use
+        Aula's profileLastSeenPostDate because that field is a profile-level
+        watermark updated whenever the user opens the Aula website — not a per-post
+        indicator — which caused every post to appear read.
+        """
         try:
             result = self._client.get_posts(index=0, limit=20)
             raw_posts = result.get("posts", [])
-            last_seen = result.get("profileLastSeenPostDate", "")
         except Exception as e:
             _LOGGER.warning(f"Failed to fetch posts: {e}")
             return []
@@ -213,8 +225,10 @@ class AulaService:
                     "url": file_info.get("url", ""),
                 })
 
+            post_id = str(post.get("id", ""))
             post_timestamp = post.get("publishAt") or post.get("timestamp", "")
-            is_read = bool(last_seen and post_timestamp and post_timestamp <= last_seen)
+            # Read status is managed locally — only True after mark_post_read() is called.
+            is_read = post_id in self._user_read_post_ids
 
             # Child association from relatedProfiles
             related = post.get("relatedProfiles", [])
@@ -224,7 +238,7 @@ class AulaService:
             ]
 
             posts.append({
-                "id": str(post.get("id", "")),
+                "id": post_id,
                 "title": post.get("title", "(intet emne)"),
                 "content": html,
                 "sender": sender,
@@ -238,6 +252,11 @@ class AulaService:
                 "child_profile_ids": child_profile_ids,
             })
         return posts
+
+    def mark_post_read(self, post_id: str) -> bool:
+        """Mark a post as read in our local tracking set."""
+        self._user_read_post_ids.add(post_id)
+        return True
 
     def get_vacation_registrations(self) -> list[dict[str, Any]]:
         """Return pending vacation registrations for all children."""
@@ -538,11 +557,18 @@ class AulaService:
         try:
             result = self._client.get_posts(index=0, limit=20)
             raw_posts = result.get("posts", [])
-            last_seen = result.get("profileLastSeenPostDate", "")
-            unread_posts = sum(
-                1 for p in raw_posts
-                if not (last_seen and (p.get("publishAt") or p.get("timestamp", "")) <= last_seen)
-            )
+            current_ids = {str(p.get("id", "")) for p in raw_posts if p.get("id")}
+
+            if self._seen_post_ids is None:
+                # First poll: seed baseline so we don't spam notifications for
+                # pre-existing posts on startup.
+                self._seen_post_ids = current_ids
+                unread_posts = 0
+            else:
+                new_ids = current_ids - self._seen_post_ids
+                unread_posts = len(new_ids)
+                # Grow the seen set so each new post only triggers once.
+                self._seen_post_ids = self._seen_post_ids | current_ids
         except Exception:
             unread_posts = 0
 
