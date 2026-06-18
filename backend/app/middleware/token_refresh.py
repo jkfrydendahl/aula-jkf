@@ -74,8 +74,8 @@ class TokenRefreshMiddleware:
             try:
                 import asyncio
                 loop = asyncio.get_event_loop()
-                new_tokens = await loop.run_in_executor(None, renew_token_fn, tokens.refresh_token)
-                token_repository.save(new_tokens)
+                await loop.run_in_executor(None, renew_token_fn)
+                # renew_token_fn reads + saves inside the lock; no need to save here
             except Exception as e:
                 _LOGGER.warning(f"Token refresh failed: {e}")
                 response = StarletteJSONResponse(

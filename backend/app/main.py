@@ -62,23 +62,29 @@ def create_app(
 
         return _on_tokens_updated
 
-    def make_renew_fn(aula_client: AulaClient) -> Callable[[str], TokenData]:
-        # Shared with AulaClient._token_refresh_lock so both paths serialize on the same lock
-        def renew_token(refresh_token: str) -> TokenData:
+    def make_renew_fn(aula_client: AulaClient, token_repo) -> Callable[[], TokenData]:
+        # Shared with AulaClient._token_refresh_lock so both paths serialize on the same lock.
+        # Token is re-read inside the lock to avoid TOCTOU with the lazy-refresh path.
+        def renew_token() -> TokenData:
             """Renew the access token using the Aula login client (serialized per user)."""
             with aula_client._token_refresh_lock:
+                current = token_repo.load()
+                if current is None:
+                    raise Exception("No tokens available for renewal")
                 login_client = aula_client._aula_client
-                login_client.tokens = {"refresh_token": refresh_token}
+                login_client.tokens = {"refresh_token": current.refresh_token}
                 success = login_client.renew_access_token()
                 if not success:
                     raise Exception("Token renewal failed")
                 tokens = login_client.tokens
                 expires_at = time.time() + tokens.get("expires_in", 3600)
-                return TokenData(
+                new_tokens = TokenData(
                     access_token=tokens["access_token"],
                     refresh_token=tokens["refresh_token"],
                     expires_at=expires_at,
                 )
+                token_repo.save(new_tokens)
+                return new_tokens
 
         return renew_token
 
@@ -121,7 +127,7 @@ def create_app(
             vapid_public_key=settings.vapid_public_key,
             vapid_claim_email=settings.vapid_claim_email,
         )
-        renew_fn = make_renew_fn(aula_client)
+        renew_fn = make_renew_fn(aula_client, token_repo)
         user_registry[user.user_id] = {
             "aula_client": aula_client,
             "aula_service": aula_service,
@@ -219,8 +225,7 @@ def create_app(
                     time_until_expiry = tokens.expires_at - time.time()
                     if time_until_expiry < 600:  # Renew if less than 10 minutes left
                         _LOGGER.info(f"Proactive token renewal for user {uid} (expires in {int(time_until_expiry)}s)")
-                        new_tokens = renew(tokens.refresh_token)
-                        repo.save(new_tokens)
+                        renew()  # reads fresh token and saves inside the lock
                         _LOGGER.info(f"Token renewed for user {uid}")
                 except Exception as e:
                     _LOGGER.warning(f"Proactive token renewal failed for user {uid}: {e}")

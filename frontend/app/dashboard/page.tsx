@@ -213,7 +213,12 @@ export default function DashboardPage() {
     const unread = posts.filter((p) => !p.is_read);
     if (unread.length === 0) return;
     setPosts((prev) => prev.map((p) => ({ ...p, is_read: true })));
-    await Promise.allSettled(unread.map((p) => api.markPostRead(p.id)));
+    const results = await Promise.allSettled(unread.map((p) => api.markPostRead(p.id)));
+    const failedIds = unread.filter((_, i) => results[i].status === "rejected" || (results[i] as PromiseFulfilledResult<{ success: boolean }>).value?.success === false).map((p) => p.id);
+    if (failedIds.length > 0) {
+      setPosts((prev) => prev.map((p) => failedIds.includes(p.id) ? { ...p, is_read: false } : p));
+      showToast("Kunne ikke markere alle opslag som læst", "error");
+    }
   }
 
   async function openVacation(vac: VacationRegistration) {
