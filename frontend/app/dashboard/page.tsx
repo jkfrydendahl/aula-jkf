@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [selectedVacation, setSelectedVacation] = useState<VacationRegistration | null>(null);
   const [vacationDays, setVacationDays] = useState<{ date: string; isComing: boolean }[]>([]);
   const [vacationSubmitting, setVacationSubmitting] = useState(false);
+  const listScrollPos = useRef<number>(0);
 
   // Pickup form state
   const [pickupFormChild, setPickupFormChild] = useState<string | null>(null);
@@ -118,6 +119,16 @@ export default function DashboardPage() {
     };
   }, [children]);
 
+  // Restore scroll position when returning from detail view to list
+  useEffect(() => {
+    if (!selectedThread && !selectedPost) {
+      const pos = listScrollPos.current;
+      if (pos > 0) {
+        requestAnimationFrame(() => window.scrollTo(0, pos));
+      }
+    }
+  }, [selectedThread, selectedPost]);
+
   async function loadData() {
     try {
       setLoading(true);
@@ -158,6 +169,7 @@ export default function DashboardPage() {
   }
 
   async function openThread(msg: Message) {
+    listScrollPos.current = window.scrollY;
     setThreadLoading(true);
     try {
       const detail = await api.getThread(msg.id);
@@ -925,6 +937,7 @@ export default function DashboardPage() {
                 <div
                   className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${!post.is_read ? "bg-blue-50 dark:bg-blue-900/30" : ""} ${post.is_important ? "border-l-4 border-orange-400" : ""}`}
                   onClick={() => {
+                    listScrollPos.current = window.scrollY;
                     setSelectedPost(post);
                     if (!post.is_read) {
                       // Mark as read locally and notify the backend.
