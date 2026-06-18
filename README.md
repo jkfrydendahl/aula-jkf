@@ -44,8 +44,6 @@ The Next.js proxy route is intentional: it keeps browser traffic same-origin and
 
 ### Important login notes
 
-- MitID login must happen from a **residential IP**
-- Aula/STIL blocks datacenter IPs for authentication
 - Tokens renew silently in normal use
 - MitID re-authentication is usually only needed when the refresh token expires
 

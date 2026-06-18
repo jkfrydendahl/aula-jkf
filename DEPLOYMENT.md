@@ -91,12 +91,6 @@ No separate manual frontend deploy step is part of the normal production workflo
 
 ## Authentication and MitID operations
 
-### Residential IP requirement
-
-MitID login must happen from a **residential IP**.
-
-Aula/STIL blocks authentication requests from datacenter IPs, so the initial login and any later re-authentication must be completed by a real user through the app on a residential connection.
-
 ### Normal login and re-auth flow
 
 1. Open the app

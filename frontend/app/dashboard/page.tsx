@@ -445,7 +445,7 @@ export default function DashboardPage() {
           </div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Login påkrævet</h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Din session er udløbet. Log ind igen fra dit hjemmenetværk for at forny adgangen.
+            Din session er udløbet. Log ind igen med MitID for at forny adgangen.
           </p>
           <a
             href="/login"

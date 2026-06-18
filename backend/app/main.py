@@ -201,9 +201,38 @@ def create_app(
     app.include_router(create_action_router())
     app.include_router(create_push_router())
 
-    # Background poller — only runs if VAPID keys are configured
+    # Background scheduler — token renewal always runs; poller runs if VAPID configured
+    scheduler = BackgroundScheduler()
+
+    for user_id, entry in user_registry.items():
+        token_repo = entry["token_repo"]
+        renew_fn = entry["renew_fn"]
+
+        def make_token_renewal_job(repo, renew, uid):
+            def _renew_token_if_needed():
+                try:
+                    tokens = repo.load()
+                    if tokens is None:
+                        return
+                    time_until_expiry = tokens.expires_at - time.time()
+                    if time_until_expiry < 600:  # Renew if less than 10 minutes left
+                        _LOGGER.info(f"Proactive token renewal for user {uid} (expires in {int(time_until_expiry)}s)")
+                        new_tokens = renew(tokens.refresh_token)
+                        repo.save(new_tokens)
+                        _LOGGER.info(f"Token renewed for user {uid}")
+                except Exception as e:
+                    _LOGGER.warning(f"Proactive token renewal failed for user {uid}: {e}")
+            return _renew_token_if_needed
+
+        scheduler.add_job(
+            make_token_renewal_job(token_repo, renew_fn, user_id),
+            "interval",
+            seconds=300,  # Check every 5 minutes
+            id=f"token_renewal_{user_id}",
+            replace_existing=True,
+        )
+
     if settings.vapid_private_key:
-        scheduler = BackgroundScheduler()
         for user_id, entry in user_registry.items():
             scheduler.add_job(
                 entry["poller"].tick,
@@ -212,12 +241,14 @@ def create_app(
                 id=f"aula_poller_{user_id}",
                 replace_existing=True,
             )
-        scheduler.start()
         _LOGGER.info(f"Background poller started (interval: {settings.poll_interval}s)")
 
-        @app.on_event("shutdown")
-        def shutdown_scheduler():
-            scheduler.shutdown(wait=False)
+    scheduler.start()
+    _LOGGER.info("Background scheduler started (token renewal every 5 min)")
+
+    @app.on_event("shutdown")
+    def shutdown_scheduler():
+        scheduler.shutdown(wait=False)
 
     return app
 
