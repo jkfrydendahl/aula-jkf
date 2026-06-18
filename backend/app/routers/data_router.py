@@ -79,6 +79,15 @@ def create_data_router() -> APIRouter:
             _LOGGER.warning(f"Failed to mark post {post_id} as read: {e}")
             return {"success": False}
 
+    @router.post("/posts/{post_id}/unread")
+    def mark_post_unread(post_id: str, aula_service: AulaService = Depends(get_aula_service)):
+        try:
+            success = aula_service.mark_post_unread(post_id)
+            return {"success": success}
+        except Exception as e:
+            _LOGGER.warning(f"Failed to mark post {post_id} as unread: {e}")
+            return {"success": False}
+
     @router.get("/vacation-registrations")
     def get_vacation_registrations(aula_service: AulaService = Depends(get_aula_service)):
         aula_service.ensure_data_loaded()

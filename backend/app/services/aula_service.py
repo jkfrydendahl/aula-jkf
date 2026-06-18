@@ -258,6 +258,11 @@ class AulaService:
         self._user_read_post_ids.add(post_id)
         return True
 
+    def mark_post_unread(self, post_id: str) -> bool:
+        """Mark a post as unread in our local tracking set."""
+        self._user_read_post_ids.discard(post_id)
+        return True
+
     def get_vacation_registrations(self) -> list[dict[str, Any]]:
         """Return pending vacation registrations for all children."""
         try:

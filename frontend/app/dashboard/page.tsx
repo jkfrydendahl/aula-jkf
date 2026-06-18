@@ -194,6 +194,21 @@ export default function DashboardPage() {
     }
   }
 
+  async function togglePostReadStatus(post: Post) {
+    const newRead = !post.is_read;
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, is_read: newRead } : p)));
+    try {
+      const result = newRead ? await api.markPostRead(post.id) : await api.markPostUnread(post.id);
+      if (!result.success) {
+        setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, is_read: !newRead } : p)));
+        showToast("Kunne ikke opdatere opslag", "error");
+      }
+    } catch {
+      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, is_read: !newRead } : p)));
+      showToast("Kunne ikke opdatere opslag", "error");
+    }
+  }
+
   async function openVacation(vac: VacationRegistration) {
     setSelectedVacation(vac);
     // Generate weekdays between start and end
@@ -929,9 +944,12 @@ export default function DashboardPage() {
                       <time className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                         {post.timestamp ? new Date(post.timestamp).toLocaleDateString("da-DK") : ""}
                       </time>
-                      <span className={`text-xs mt-1 px-2 py-0.5 rounded-full ${post.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-300" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium"}`}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); togglePostReadStatus(post); }}
+                        className={`text-xs mt-1 px-2 py-0.5 rounded-full ${post.is_read ? "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50"}`}
+                      >
                         {post.is_read ? "Læst" : "Ulæst"}
-                      </span>
+                      </button>
                       {post.attachments.length > 0 && (
                         <span className="text-xs text-gray-400 dark:text-gray-500 mt-1">📎 {post.attachments.length}</span>
                       )}
