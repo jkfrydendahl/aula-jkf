@@ -2,12 +2,12 @@
 
 Aula JKF is a private FastAPI + Next.js PWA for accessing Aula with MitID login, family-specific accounts, and push notifications.
 
-> **Note:** This is a personal deployment. Only whitelisted accounts can use this instance. If you want to try it out, create your own copy from the source code — or contact the author.
+> **Note:** Only whitelisted accounts can use this app instance. If you want to try it out, create your own fork or copy of the repo - or contact the author for account configuration.
 
 ## Production setup
 
 - **Frontend:** Next.js PWA on **Vercel**
-- **Backend:** FastAPI in **Docker** on a **Webdock VPS** at `YOUR_VPS_IP`
+- **Backend:** FastAPI in **Docker** on a **Webdock VPS**
 - **Server path:** `/opt/aula-jkf/`
 - **Backend env file:** `/opt/aula-jkf/backend.env`
 - **Persistent data:** `/opt/aula-jkf/data/`
