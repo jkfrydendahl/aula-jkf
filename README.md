@@ -2,6 +2,8 @@
 
 Aula JKF is a private FastAPI + Next.js PWA for accessing Aula with MitID login, family-specific accounts, and push notifications.
 
+> **Note:** This is a personal deployment. Only whitelisted accounts can use this instance. If you want to try it out, create your own copy from the source code — or contact the author.
+
 ## Production setup
 
 - **Frontend:** Next.js PWA on **Vercel**
@@ -149,3 +151,7 @@ Planned, but not implemented yet:
 - Galleries
 - Compose/send messages
 - PWA icons (proper 192×512 branded icons)
+
+## Credits
+
+Built on top of [scaarup/aula](https://github.com/scaarup/aula) — an unofficial Python client for the Danish school platform Aula. The `aula_login_client` and `aula_client` modules are derived from that work.

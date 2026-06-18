@@ -9,13 +9,24 @@ class BackgroundPoller:
     def __init__(self, aula_service, push_service, previous_unread_count: int = 0):
         self._aula_service = aula_service
         self._push_service = push_service
-        self._previous_counts = {"messages": 0, "posts": 0, "vacations": 0}
+        self._previous_counts = None  # None = uninitialized; seed on first tick
 
     def tick(self):
         """Run one poll cycle. Called by scheduler."""
         try:
             self._aula_service.refresh_all()
             current_counts = self._aula_service.get_new_item_counts()
+
+            if self._previous_counts is None:
+                # First tick: seed baseline to avoid startup spike notifications.
+                self._previous_counts = {
+                    "messages": current_counts.get("messages", 0),
+                    "posts": 0,
+                    "vacations": current_counts.get("vacations", 0),
+                }
+                _LOGGER.info(f"Poll tick (baseline seeded): counts={current_counts}")
+                return
+
             _LOGGER.info(f"Poll tick: counts={current_counts}, previous={self._previous_counts}")
 
             # Posts count is a delta (new since last check) — fire if any new.
