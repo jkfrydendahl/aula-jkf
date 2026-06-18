@@ -37,27 +37,29 @@ class BackgroundPoller:
 
             # Posts count is a delta (new since last check) — fire if any new.
             # Messages and vacations are totals — fire if they increased.
+            cur_messages = current_counts.get("messages", 0)
+            cur_vacations = current_counts.get("vacations", 0)
+            prev_messages = self._previous_counts.get("messages", 0)
+            prev_vacations = self._previous_counts.get("vacations", 0)
             new_posts = current_counts.get("posts", 0)
-            messages_increased = current_counts.get("messages", 0) > self._previous_counts.get("messages", 0)
-            vacations_increased = current_counts.get("vacations", 0) > self._previous_counts.get("vacations", 0)
+            messages_increased = cur_messages > prev_messages
+            vacations_increased = cur_vacations > prev_vacations
+            notified = False
 
             if new_posts > 0 or messages_increased or vacations_increased:
-                new_count = new_posts + (
-                    max(0, current_counts.get("messages", 0) - self._previous_counts.get("messages", 0))
-                ) + (
-                    max(0, current_counts.get("vacations", 0) - self._previous_counts.get("vacations", 0))
-                )
+                new_count = new_posts + max(0, cur_messages - prev_messages) + max(0, cur_vacations - prev_vacations)
                 self._push_service.send_notification(
                     title="Ny besked i Aula" if new_count == 1 else f"{new_count} nye beskeder i Aula",
                     body="Tryk for at åbne",
                 )
+                notified = True
 
-            # Store totals for messages/vacations; track downward too so we don't
-            # miss new items that arrive after the user reads existing ones.
+            # After notifying: set previous = current so we don't re-notify on next tick.
+            # Without notification: track downward (min) so a new item after reading still triggers.
             self._previous_counts = {
-                "messages": min(self._previous_counts.get("messages", 0), current_counts.get("messages", 0)),
+                "messages": cur_messages if notified else min(prev_messages, cur_messages),
                 "posts": 0,
-                "vacations": min(self._previous_counts.get("vacations", 0), current_counts.get("vacations", 0)),
+                "vacations": cur_vacations if notified else min(prev_vacations, cur_vacations),
             }
 
             # Check for pickup type changes for any child.
