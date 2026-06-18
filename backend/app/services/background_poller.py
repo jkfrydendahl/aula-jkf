@@ -52,11 +52,12 @@ class BackgroundPoller:
                     body="Tryk for at åbne",
                 )
 
-            # Store totals for messages/vacations; posts delta resets automatically.
+            # Store totals for messages/vacations; track downward too so we don't
+            # miss new items that arrive after the user reads existing ones.
             self._previous_counts = {
-                "messages": current_counts.get("messages", 0),
+                "messages": min(self._previous_counts.get("messages", 0), current_counts.get("messages", 0)),
                 "posts": 0,
-                "vacations": current_counts.get("vacations", 0),
+                "vacations": min(self._previous_counts.get("vacations", 0), current_counts.get("vacations", 0)),
             }
 
             # Check for pickup type changes for any child.
