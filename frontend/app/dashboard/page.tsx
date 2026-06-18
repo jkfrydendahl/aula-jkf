@@ -389,9 +389,17 @@ export default function DashboardPage() {
     try {
       const reg = await navigator.serviceWorker.ready;
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
+      // Safari/Apple requires applicationServerKey as Uint8Array, not a raw string
+      const padding = "=".repeat((4 - (vapidKey.length % 4)) % 4);
+      const base64 = (vapidKey + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const rawData = atob(base64);
+      const applicationServerKey = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; i++) {
+        applicationServerKey[i] = rawData.charCodeAt(i);
+      }
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: vapidKey,
+        applicationServerKey,
       });
       await api.pushSubscribe(sub.toJSON() as PushSubscriptionJSON);
       showToast("Notifikationer aktiveret ✓");
