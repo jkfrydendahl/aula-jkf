@@ -151,6 +151,7 @@ Planned, but not implemented yet:
 - Galleries
 - Compose/send messages
 - PWA icons (proper 192×512 branded icons)
+- Persist post read state across backend restarts (write `_user_read_post_ids` to `/app/data/`)
 
 ## Credits
 
