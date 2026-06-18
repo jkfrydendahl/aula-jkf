@@ -116,6 +116,7 @@ def create_app(
         push_service = PushService(
             push_repository=push_repo,
             vapid_private_key=settings.vapid_private_key,
+            vapid_public_key=settings.vapid_public_key,
             vapid_claim_email=settings.vapid_claim_email,
         )
         renew_fn = make_renew_fn(aula_client)

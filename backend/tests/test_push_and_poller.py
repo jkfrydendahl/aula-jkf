@@ -66,6 +66,7 @@ class TestPushSubscribeUnsubscribe:
         push_service = PushService(
             push_repository=push_repo,
             vapid_private_key="test-key",
+            vapid_public_key="test-public-key",
             vapid_claim_email="test@example.com",
         )
 
@@ -84,6 +85,7 @@ class TestPushSubscribeUnsubscribe:
         push_service = PushService(
             push_repository=push_repo,
             vapid_private_key="test-key",
+            vapid_public_key="test-public-key",
             vapid_claim_email="test@example.com",
         )
 
@@ -101,6 +103,7 @@ class TestPushSubscribeUnsubscribe:
         push_service = PushService(
             push_repository=push_repo,
             vapid_private_key="test-key",
+            vapid_public_key="test-public-key",
             vapid_claim_email="test@example.com",
         )
         app = FastAPI()
@@ -120,6 +123,7 @@ class TestPushSubscribeUnsubscribe:
         push_service = PushService(
             push_repository=push_repo,
             vapid_private_key="test-key",
+            vapid_public_key="test-public-key",
             vapid_claim_email="test@example.com",
         )
         # Pre-save a subscription

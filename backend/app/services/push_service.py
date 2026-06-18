@@ -1,17 +1,28 @@
+import json
 import logging
-from typing import Optional
+import os
+import subprocess
 
 from app.repositories.push_repository import PushRepository, PushSubscription
 
 _LOGGER = logging.getLogger(__name__)
 
+_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "send_push.js")
+
 
 class PushService:
     """Manages push subscriptions and sends notifications."""
 
-    def __init__(self, push_repository: PushRepository, vapid_private_key: str, vapid_claim_email: str):
+    def __init__(
+        self,
+        push_repository: PushRepository,
+        vapid_private_key: str,
+        vapid_public_key: str,
+        vapid_claim_email: str,
+    ):
         self._repo = push_repository
         self._vapid_private_key = vapid_private_key
+        self._vapid_public_key = vapid_public_key
         self._vapid_claim_email = vapid_claim_email
 
     def subscribe(self, subscription: PushSubscription) -> None:
@@ -30,22 +41,26 @@ class PushService:
                 _LOGGER.warning(f"Failed to send push to {sub.endpoint}: {e}")
 
     def _send_to_subscriber(self, sub: PushSubscription, title: str, body: str) -> None:
-        """Send to a single subscriber using pywebpush."""
-        import json
-        from urllib.parse import urlparse
-        from pywebpush import webpush
-
-        # Apple Web Push requires `aud` set to the push service origin explicitly
-        parsed = urlparse(sub.endpoint)
-        endpoint_origin = f"{parsed.scheme}://{parsed.netloc}"
-        vapid_claims = {
-            "sub": f"mailto:{self._vapid_claim_email}",
-            "aud": endpoint_origin,
-        }
-
-        webpush(
-            subscription_info={"endpoint": sub.endpoint, "keys": sub.keys},
-            data=json.dumps({"title": title, "body": body}),
-            vapid_private_key=self._vapid_private_key,
-            vapid_claims=vapid_claims,
+        """Send to a single subscriber via Node.js web-push (Apple-compatible)."""
+        payload = json.dumps(
+            {
+                "endpoint": sub.endpoint,
+                "keys": sub.keys,
+                "title": title,
+                "body": body,
+                "vapid_public_key": self._vapid_public_key,
+                "vapid_private_key": self._vapid_private_key,
+                "vapid_email": self._vapid_claim_email,
+            }
         )
+
+        result = subprocess.run(
+            ["node", os.path.abspath(_SCRIPT_PATH)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or "node send_push.js failed")
