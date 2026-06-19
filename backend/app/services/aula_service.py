@@ -412,7 +412,9 @@ class AulaService:
         if success:
             # Pre-acknowledge so the poller doesn't fire a notification for our own change.
             self._known_presence_states[str(child_id)] = status
-        return {"success": success, "data": result}(self, child_id: str, is_sick: bool) -> dict[str, Any]:
+        return {"success": success, "data": result}
+
+    def update_sick_status(self, child_id: str, is_sick: bool) -> dict[str, Any]:
         """Mark child as sick or not sick."""
         self._ensure_tokens_loaded()
         csrf_token = self._client._get_csrf_token()
