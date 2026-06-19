@@ -30,6 +30,8 @@ class AulaService:
         self._user_read_post_ids: set[str] = set()
         # Pickup states we've set ourselves — suppresses spurious poller notifications.
         self._known_pickup_states: dict[str, dict] = {}
+        # Presence statuses we've set ourselves — suppresses spurious poller notifications.
+        self._known_presence_states: dict[str, str] = {}
 
     def _ensure_tokens_loaded(self):
         """Reload tokens from repository into client if missing or stale."""
@@ -407,9 +409,10 @@ class AulaService:
             }),
         )
         success = (result.get("status") or {}).get("message") == "OK"
-        return {"success": success, "data": result}
-
-    def update_sick_status(self, child_id: str, is_sick: bool) -> dict[str, Any]:
+        if success:
+            # Pre-acknowledge so the poller doesn't fire a notification for our own change.
+            self._known_presence_states[str(child_id)] = status
+        return {"success": success, "data": result}(self, child_id: str, is_sick: bool) -> dict[str, Any]:
         """Mark child as sick or not sick."""
         self._ensure_tokens_loaded()
         csrf_token = self._client._get_csrf_token()

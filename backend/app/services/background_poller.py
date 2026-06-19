@@ -104,19 +104,25 @@ class BackgroundPoller:
                         if prev_status is None:
                             continue
                         if current_status != prev_status and current_status == "checked_in":
-                            child_name = self._aula_service.get_child_name(child_id)
-                            _LOGGER.info(f"Child checked in: {child_name} (id={child_id})")
-                            self._push_service.send_notification(
-                                title=f"{child_name} er ankommet",
-                                body="Barnet er tjekket ind",
-                            )
+                            if self._aula_service._known_presence_states.pop(child_id, None) == current_status:
+                                _LOGGER.info(f"Check-in for child {child_id} was triggered by us — suppressed")
+                            else:
+                                child_name = self._aula_service.get_child_name(child_id)
+                                _LOGGER.info(f"Child checked in: {child_name} (id={child_id})")
+                                self._push_service.send_notification(
+                                    title=f"{child_name} er ankommet",
+                                    body="Barnet er tjekket ind",
+                                )
                         elif current_status != prev_status and current_status == "checked_out":
-                            child_name = self._aula_service.get_child_name(child_id)
-                            _LOGGER.info(f"Child checked out: {child_name} (id={child_id})")
-                            self._push_service.send_notification(
-                                title=f"{child_name} er afhentet",
-                                body="Barnet er tjekket ud",
-                            )
+                            if self._aula_service._known_presence_states.pop(child_id, None) == current_status:
+                                _LOGGER.info(f"Check-out for child {child_id} was triggered by us — suppressed")
+                            else:
+                                child_name = self._aula_service.get_child_name(child_id)
+                                _LOGGER.info(f"Child checked out: {child_name} (id={child_id})")
+                                self._push_service.send_notification(
+                                    title=f"{child_name} er afhentet",
+                                    body="Barnet er tjekket ud",
+                                )
                 self._previous_presence_states = current_presence
             except Exception as e:
                 _LOGGER.warning(f"Presence state check failed: {e}")
