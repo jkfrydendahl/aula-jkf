@@ -589,7 +589,7 @@ export default function DashboardPage() {
                             onClick={() => updatePresence(child.id, "checked_in")}
                             className="text-xs px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
                           >
-                            Registrér ankomst
+                            Ankomst
                           </button>
                         )}
                         {p.status === "checked_in" && (
@@ -597,14 +597,14 @@ export default function DashboardPage() {
                             onClick={() => updatePresence(child.id, "checked_out")}
                             className="text-xs px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                           >
-                            Registrér afgang
+                            Afgang
                           </button>
                         )}
                         <button
                           onClick={() => openPickupForm(child.id)}
                           className="text-xs px-3 py-1 rounded-full bg-blue-600 text-white hover:bg-blue-700"
                         >
-                          Ændr hentetype
+                          Hentetype
                         </button>
                         {p.status !== "sick" && (
                           <button
@@ -619,7 +619,7 @@ export default function DashboardPage() {
                             onClick={() => markSick(child.id, false)}
                             className="text-xs px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
                           >
-                            Fjern sygemelding
+                            Rask igen
                           </button>
                         )}
                       </div>
