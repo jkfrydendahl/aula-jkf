@@ -79,7 +79,16 @@ class BackgroundPoller:
                                 current_state["exit_with"] != prev_state["exit_with"]):
                             # Suppress morning auto-reset to unspecified state
                             is_reset = (current_state["activity_type"] == 0 and current_state["exit_with"] == "")
-                            if not is_reset:
+                            # Suppress if we made this change ourselves
+                            known = self._aula_service._known_pickup_states.pop(child_id, None)
+                            is_own_change = (known is not None and
+                                             known["activity_type"] == current_state["activity_type"] and
+                                             known["exit_with"] == current_state["exit_with"])
+                            if is_reset:
+                                _LOGGER.info(f"Pickup reset to unspecified for child {child_id} — suppressed")
+                            elif is_own_change:
+                                _LOGGER.info(f"Pickup change for child {child_id} was triggered by us — suppressed")
+                            else:
                                 child_name = self._aula_service.get_child_name(child_id)
                                 _LOGGER.info(
                                     f"Pickup changed for {child_name} (id={child_id}): "
@@ -89,8 +98,6 @@ class BackgroundPoller:
                                     title="Afhentning ændret",
                                     body=f"Afhentning for {child_name} er ændret",
                                 )
-                            else:
-                                _LOGGER.info(f"Pickup reset to unspecified for child {child_id} — suppressed")
                 self._previous_pickup_states = current_pickup_states
             except Exception as e:
                 _LOGGER.warning(f"Pickup state check failed: {e}")
