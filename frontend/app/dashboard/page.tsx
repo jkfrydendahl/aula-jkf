@@ -592,6 +592,14 @@ export default function DashboardPage() {
                             Registrér ankomst
                           </button>
                         )}
+                        {p.status === "checked_in" && (
+                          <button
+                            onClick={() => updatePresence(child.id, "checked_out")}
+                            className="text-xs px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                          >
+                            Registrér afgang
+                          </button>
+                        )}
                         <button
                           onClick={() => openPickupForm(child.id)}
                           className="text-xs px-3 py-1 rounded-full bg-blue-600 text-white hover:bg-blue-700"

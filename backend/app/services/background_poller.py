@@ -11,6 +11,7 @@ class BackgroundPoller:
         self._push_service = push_service
         self._previous_counts = None  # None = uninitialized; seed on first tick
         self._previous_pickup_states: dict | None = None  # None = uninitialized; seed on first tick
+        self._previous_presence_states: dict | None = None  # None = uninitialized; seed on first tick
 
     def tick(self):
         """Run one poll cycle. Called by scheduler."""
@@ -25,11 +26,15 @@ class BackgroundPoller:
                     "posts": 0,
                     "vacations": current_counts.get("vacations", 0),
                 }
-                # Also seed pickup states so first real comparison has a baseline.
+                # Also seed pickup and presence states so first real comparison has a baseline.
                 try:
                     self._previous_pickup_states = self._aula_service.get_pickup_states()
                 except Exception as e:
                     _LOGGER.warning(f"Failed to seed pickup states baseline: {e}")
+                try:
+                    self._previous_presence_states = self._aula_service.get_presence_states_for_poller()
+                except Exception as e:
+                    _LOGGER.warning(f"Failed to seed presence states baseline: {e}")
                 _LOGGER.info(f"Poll tick (baseline seeded): counts={current_counts}")
                 return
 
@@ -72,18 +77,49 @@ class BackgroundPoller:
                             continue
                         if (current_state["activity_type"] != prev_state["activity_type"] or
                                 current_state["exit_with"] != prev_state["exit_with"]):
-                            child_name = self._aula_service.get_child_name(child_id)
-                            _LOGGER.info(
-                                f"Pickup changed for {child_name} (id={child_id}): "
-                                f"{prev_state} → {current_state}"
-                            )
-                            self._push_service.send_notification(
-                                title="Afhentning ændret",
-                                body=f"Afhentning for {child_name} er ændret",
-                            )
+                            # Suppress morning auto-reset to unspecified state
+                            is_reset = (current_state["activity_type"] == 0 and current_state["exit_with"] == "")
+                            if not is_reset:
+                                child_name = self._aula_service.get_child_name(child_id)
+                                _LOGGER.info(
+                                    f"Pickup changed for {child_name} (id={child_id}): "
+                                    f"{prev_state} → {current_state}"
+                                )
+                                self._push_service.send_notification(
+                                    title="Afhentning ændret",
+                                    body=f"Afhentning for {child_name} er ændret",
+                                )
+                            else:
+                                _LOGGER.info(f"Pickup reset to unspecified for child {child_id} — suppressed")
                 self._previous_pickup_states = current_pickup_states
             except Exception as e:
                 _LOGGER.warning(f"Pickup state check failed: {e}")
+
+            # Check for presence status changes (notify when child checks in).
+            try:
+                current_presence = self._aula_service.get_presence_states_for_poller()
+                if self._previous_presence_states is not None:
+                    for child_id, current_status in current_presence.items():
+                        prev_status = self._previous_presence_states.get(child_id)
+                        if prev_status is None:
+                            continue
+                        if current_status != prev_status and current_status == "checked_in":
+                            child_name = self._aula_service.get_child_name(child_id)
+                            _LOGGER.info(f"Child checked in: {child_name} (id={child_id})")
+                            self._push_service.send_notification(
+                                title=f"{child_name} er ankommet",
+                                body="Barnet er tjekket ind",
+                            )
+                        elif current_status != prev_status and current_status == "checked_out":
+                            child_name = self._aula_service.get_child_name(child_id)
+                            _LOGGER.info(f"Child checked out: {child_name} (id={child_id})")
+                            self._push_service.send_notification(
+                                title=f"{child_name} er afhentet",
+                                body="Barnet er tjekket ud",
+                            )
+                self._previous_presence_states = current_presence
+            except Exception as e:
+                _LOGGER.warning(f"Presence state check failed: {e}")
 
         except Exception as e:
             _LOGGER.error(f"Background poll failed: {e}")

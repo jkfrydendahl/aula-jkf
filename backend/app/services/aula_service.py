@@ -623,6 +623,19 @@ class AulaService:
                 _LOGGER.warning(f"get_pickup_states failed for child {child_id}: {e}")
         return states
 
+    def get_presence_states_for_poller(self) -> dict[str, str]:
+        """Return {child_id: status} for all children. Used by the poller to detect check-ins."""
+        self._ensure_tokens_loaded()
+        states: dict[str, str] = {}
+        for child in self._client._children:
+            child_id = str(child["id"])
+            try:
+                presence = self.get_presence(child_id)
+                states[child_id] = presence.get("status", "unknown")
+            except Exception as e:
+                _LOGGER.warning(f"get_presence_states_for_poller failed for child {child_id}: {e}")
+        return states
+
     def get_child_name(self, child_id: str) -> str:
         """Return the display name for a child by ID, falling back to the ID itself."""
         for child in self._client._children:
