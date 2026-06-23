@@ -54,7 +54,7 @@ class BackgroundPoller:
             if new_posts > 0 or messages_increased or vacations_increased:
                 new_count = new_posts + max(0, cur_messages - prev_messages) + max(0, cur_vacations - prev_vacations)
                 self._push_service.send_notification(
-                    title="Ny besked i Aula" if new_count == 1 else f"{new_count} nye beskeder i Aula",
+                    title="Ny besked" if new_count == 1 else f"{new_count} nye beskeder",
                     body="Tryk for at åbne",
                 )
                 notified = True
