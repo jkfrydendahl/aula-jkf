@@ -104,12 +104,13 @@ class AulaService:
                 break
 
         # Map Aula state codes to our status strings
-        # Known states from getPresenceStates:
-        # 0=ikke til stede, 1=syg, 8=gået hjem
-        # Unknown yet: which code = "til stede" (checked in)
+        # Known states from getPresenceStates (v24):
+        # 0=ikke til stede, 1=syg, 3=til stede, 7=SFO/efter-skole, 8=gået hjem
         state_map = {
             0: "not_present",
             1: "sick",
+            3: "checked_in",
+            7: "checked_in",  # SFO / after-school care — still present
             8: "checked_out",
         }
 
@@ -401,11 +402,18 @@ class AulaService:
     def update_presence(self, child_id: str, status: str) -> dict[str, Any]:
         """Update child presence status (check-in via updateDailyOverview)."""
         import json
+        status_code_map = {
+            "checked_in": 3,
+            "checked_out": 8,
+            "not_present": 0,
+            "sick": 1,
+        }
+        status_code = status_code_map.get(status, 0)
         result = self._client.custom_api_call(
             uri="presence.updateDailyOverview",
             post_data=json.dumps({
                 "childId": int(child_id),
-                "status": status,
+                "status": status_code,
             }),
         )
         success = (result.get("status") or {}).get("message") == "OK"
