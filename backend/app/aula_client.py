@@ -534,7 +534,7 @@ class AulaClient:
     def _verify_api_access(self):
         """Verify API access with current token."""
         # Find the API url in case of a version change
-        self.apiurl = API + API_VERSION
+        self.apiurl = API + API_VERSION + "/"
         apiver = int(API_VERSION)
         api_success = False
         max_version_attempts = 20  # Prevent infinite loop
@@ -557,7 +557,7 @@ class AulaClient:
                         + " but responded with HTTP 410. The integration will automatically try a newer version and everything may work fine."
                     )
                     apiver += 1
-                    self.apiurl = API + str(apiver)
+                    self.apiurl = API + str(apiver) + "/"
                 elif ver.status_code == 403:
                     msg = "Access to Aula API was denied. Token may be invalid or expired."
                     _LOGGER.error(msg)
