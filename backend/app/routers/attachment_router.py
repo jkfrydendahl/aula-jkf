@@ -3,7 +3,6 @@ import subprocess
 import tempfile
 import os
 import urllib.parse
-from collections import OrderedDict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,23 +15,70 @@ _LOGGER = logging.getLogger(__name__)
 
 CONVERTIBLE_EXTENSIONS = {"doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp"}
 
-# In-memory PDF cache — keyed by source URL, max 20 entries (LRU)
-_pdf_cache: OrderedDict[str, tuple[bytes, str]] = OrderedDict()
-_PDF_CACHE_MAX = 20
 
+def create_attachment_router() -> APIRouter:
+    router = APIRouter(tags=["attachments"])
 
-def _cache_get(url: str) -> tuple[bytes, str] | None:
-    if url in _pdf_cache:
-        _pdf_cache.move_to_end(url)
-        return _pdf_cache[url]
-    return None
+    @router.get("/attachments/as-pdf")
+    async def convert_to_pdf(
+        url: str,
+        name: str = "document",
+        aula_service: AulaService = Depends(get_aula_service),
+    ):
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        if ext not in CONVERTIBLE_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="File type not supported for conversion")
 
+        # Fetch the file from Aula
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                file_bytes = response.content
+        except Exception as e:
+            _LOGGER.error(f"Failed to fetch attachment: {e}")
+            raise HTTPException(status_code=502, detail="Could not fetch attachment from Aula")
 
-def _cache_set(url: str, pdf_bytes: bytes, pdf_name: str) -> None:
-    _pdf_cache[url] = (pdf_bytes, pdf_name)
-    _pdf_cache.move_to_end(url)
-    while len(_pdf_cache) > _PDF_CACHE_MAX:
-        _pdf_cache.popitem(last=False)
+        pdf_name = os.path.splitext(name)[0] + ".pdf"
+
+        # Convert via unoconvert (talks to the persistent unoserver process)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, name)
+            pdf_path = os.path.join(tmpdir, pdf_name)
+            with open(input_path, "wb") as f:
+                f.write(file_bytes)
+
+            try:
+                result = subprocess.run(
+                    ["unoconvert", "--convert-to", "pdf", input_path, pdf_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.returncode != 0:
+                    _LOGGER.error(f"unoconvert failed: {result.stderr}")
+                    raise HTTPException(status_code=500, detail="PDF conversion failed")
+            except subprocess.TimeoutExpired:
+                raise HTTPException(status_code=504, detail="PDF conversion timed out")
+
+            if not os.path.exists(pdf_path):
+                raise HTTPException(status_code=500, detail="PDF output not found after conversion")
+
+            with open(pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+
+        encoded_name = urllib.parse.quote(pdf_name)
+        return StreamingResponse(
+            iter([pdf_bytes]),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}",
+                "Content-Length": str(len(pdf_bytes)),
+            },
+        )
+
+    return router
+
 
 
 def create_attachment_router() -> APIRouter:
