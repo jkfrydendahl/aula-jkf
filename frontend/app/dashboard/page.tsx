@@ -4,16 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import DOMPurify from "dompurify";
 import { api, Child, Presence, PickupResponsible, GoHomeWithChild, Message, ThreadDetail, Post, VacationRegistration } from "@/lib/api";
 
-const OFFICE_EXTENSIONS = ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp"];
-
-function getAttachmentHref(url: string, name: string): string {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  if (OFFICE_EXTENSIONS.includes(ext)) {
-    return `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`;
-  }
-  return url;
-}
-
 // Toast notification type
 interface Toast {
   id: number;
@@ -819,7 +809,7 @@ export default function DashboardPage() {
                           {m.attachments.map((att) => (
                             <a
                               key={att.id}
-                              href={getAttachmentHref(att.url, att.name)}
+                              href={att.url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
@@ -932,7 +922,7 @@ export default function DashboardPage() {
                     {selectedPost.attachments.map((att) => (
                       <a
                         key={att.id}
-                        href={getAttachmentHref(att.url, att.name)}
+                        href={att.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
