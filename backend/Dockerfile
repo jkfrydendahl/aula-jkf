@@ -17,8 +17,8 @@ COPY . .
 # Create data directory for token persistence
 RUN mkdir -p /app/data
 
-# Startup script: launch unoserver (keeps LibreOffice warm), then uvicorn
-RUN echo '#!/bin/bash\nunoserver --daemon --host 127.0.0.1 &\nsleep 3\nexec uvicorn app.main:app --host 0.0.0.0 --port 8000' > /app/start.sh && chmod +x /app/start.sh
+# Make startup script executable
+RUN chmod +x /app/start.sh
 
 # Expose port
 EXPOSE 8000
