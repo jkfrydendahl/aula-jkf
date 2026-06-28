@@ -18,17 +18,25 @@ function AttachmentLink({ url, name }: { url: string; name: string }) {
   const [loading, setLoading] = useState(false);
   const href = getAttachmentHref(url, name);
 
-  function handleClick(e: React.MouseEvent) {
+  async function handleClick(e: React.MouseEvent) {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
-    const win = window.open(href, "_blank");
-    if (!win) {
-      // Fallback: direct navigation (pop-up blocked)
-      window.location.href = href;
+    try {
+      const res = await fetch(href);
+      if (!res.ok) throw new Error("fetch failed");
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const win = window.open(blobUrl, "_blank");
+      if (!win) window.location.href = blobUrl;
+      // Revoke after a short delay to free memory
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch {
+      // Fallback to direct navigation
+      window.open(href, "_blank") ?? (window.location.href = href);
+    } finally {
+      setLoading(false);
     }
-    // Show spinner for 30 seconds max (PDF conversion takes ~10-20s)
-    setTimeout(() => setLoading(false), 30000);
   }
 
   return (
