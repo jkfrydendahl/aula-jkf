@@ -3,13 +3,16 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Install Node.js, LibreOffice and unoserver dependencies
-RUN apt-get update && apt-get install -y nodejs npm libreoffice-writer libreoffice-calc libreoffice-impress --no-install-recommends && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y nodejs npm libreoffice-writer libreoffice-calc libreoffice-impress python3-uno --no-install-recommends && apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY package.json .
 RUN npm install --omit=dev
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir unoserver
+
+# Make LibreOffice UNO Python bindings available to our Python
+ENV PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH}"
 
 # Copy application code
 COPY . .
