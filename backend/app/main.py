@@ -25,6 +25,7 @@ from app.routers.data_router import create_data_router
 from app.routers.action_router import create_action_router
 from app.routers.push_router import create_push_router
 from app.routers.app_auth_router import create_app_auth_router
+from app.routers.attachment_router import create_attachment_router
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -208,6 +209,7 @@ def create_app(
     app.include_router(create_data_router())
     app.include_router(create_action_router())
     app.include_router(create_push_router())
+    app.include_router(create_attachment_router())
 
     # Background scheduler — token renewal always runs; poller runs if VAPID configured
     scheduler = BackgroundScheduler()
