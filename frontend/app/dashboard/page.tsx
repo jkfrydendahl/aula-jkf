@@ -4,39 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import DOMPurify from "dompurify";
 import { api, Child, Presence, PickupResponsible, GoHomeWithChild, Message, ThreadDetail, Post, VacationRegistration } from "@/lib/api";
 
-const OFFICE_PROTOCOL: Record<string, string> = {
-  doc: "ms-word", docx: "ms-word",
-  xls: "ms-excel", xlsx: "ms-excel",
-  ppt: "ms-powerpoint", pptx: "ms-powerpoint",
-};
+const OFFICE_EXTENSIONS = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
 
 function openOfficeAttachment(url: string, name: string) {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  const protocol = OFFICE_PROTOCOL[ext];
-
-  if (!protocol) {
-    window.open(url, "_blank");
-    return;
-  }
-
-  const deepLink = `${protocol}:ofe|u|${url}`;
   const onlineViewer = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`;
-
-  // Try native app via deep link
-  window.location.href = deepLink;
-
-  // If the native app opened, the page will be hidden — cancel the fallback
-  const fallback = setTimeout(() => {
-    window.open(onlineViewer, "_blank");
-  }, 1500);
-
-  const onVisibility = () => {
-    if (document.hidden) {
-      clearTimeout(fallback);
-      document.removeEventListener("visibilitychange", onVisibility);
-    }
-  };
-  document.addEventListener("visibilitychange", onVisibility);
+  window.open(onlineViewer, "_blank");
 }
 
 // Toast notification type
@@ -843,7 +815,7 @@ export default function DashboardPage() {
                         <div className="mt-3 space-y-1">
                           {m.attachments.map((att) => {
                             const ext = att.name.split(".").pop()?.toLowerCase() ?? "";
-                            const isOffice = ext in OFFICE_PROTOCOL;
+                            const isOffice = OFFICE_EXTENSIONS.includes(ext);
                             return isOffice ? (
                               <button
                                 key={att.id}
@@ -969,7 +941,7 @@ export default function DashboardPage() {
                   <div className="mt-4 space-y-1">
                     {selectedPost.attachments.map((att) => {
                       const ext = att.name.split(".").pop()?.toLowerCase() ?? "";
-                      const isOffice = ext in OFFICE_PROTOCOL;
+                      const isOffice = OFFICE_EXTENSIONS.includes(ext);
                       return isOffice ? (
                         <button
                           key={att.id}
