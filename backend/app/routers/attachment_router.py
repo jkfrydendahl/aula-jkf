@@ -3,6 +3,7 @@ import subprocess
 import tempfile
 import os
 import urllib.parse
+from collections import OrderedDict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +15,24 @@ from app.services.aula_service import AulaService
 _LOGGER = logging.getLogger(__name__)
 
 CONVERTIBLE_EXTENSIONS = {"doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp"}
+
+# In-memory PDF cache — keyed by source URL, max 20 entries (LRU)
+_pdf_cache: OrderedDict[str, tuple[bytes, str]] = OrderedDict()
+_PDF_CACHE_MAX = 20
+
+
+def _cache_get(url: str) -> tuple[bytes, str] | None:
+    if url in _pdf_cache:
+        _pdf_cache.move_to_end(url)
+        return _pdf_cache[url]
+    return None
+
+
+def _cache_set(url: str, pdf_bytes: bytes, pdf_name: str) -> None:
+    _pdf_cache[url] = (pdf_bytes, pdf_name)
+    _pdf_cache.move_to_end(url)
+    while len(_pdf_cache) > _PDF_CACHE_MAX:
+        _pdf_cache.popitem(last=False)
 
 
 def create_attachment_router() -> APIRouter:
@@ -28,6 +47,23 @@ def create_attachment_router() -> APIRouter:
         ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
         if ext not in CONVERTIBLE_EXTENSIONS:
             raise HTTPException(status_code=400, detail="File type not supported for conversion")
+
+        pdf_name = os.path.splitext(name)[0] + ".pdf"
+
+        # Return cached PDF if available
+        cached = _cache_get(url)
+        if cached:
+            _LOGGER.debug(f"Serving cached PDF for {name}")
+            pdf_bytes, pdf_name = cached
+            encoded_name = urllib.parse.quote(pdf_name)
+            return StreamingResponse(
+                iter([pdf_bytes]),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}",
+                    "Content-Length": str(len(pdf_bytes)),
+                },
+            )
 
         # Fetch the file from Aula
         try:
@@ -61,13 +97,14 @@ def create_attachment_router() -> APIRouter:
             except subprocess.TimeoutExpired:
                 raise HTTPException(status_code=504, detail="PDF conversion timed out")
 
-            pdf_name = os.path.splitext(name)[0] + ".pdf"
             pdf_path = os.path.join(tmpdir, pdf_name)
             if not os.path.exists(pdf_path):
                 raise HTTPException(status_code=500, detail="PDF output not found after conversion")
 
             with open(pdf_path, "rb") as f:
                 pdf_bytes = f.read()
+
+        _cache_set(url, pdf_bytes, pdf_name)
 
         encoded_name = urllib.parse.quote(pdf_name)
         return StreamingResponse(
