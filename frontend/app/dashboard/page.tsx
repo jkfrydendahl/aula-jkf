@@ -21,27 +21,14 @@ function AttachmentLink({ url, name }: { url: string; name: string }) {
   function handleClick(e: React.MouseEvent) {
     e.preventDefault();
     if (loading) return;
-    const win = window.open("", "_blank");
-    if (win) {
-      setLoading(true);
-      win.location.href = href;
-      // Poll until the new tab navigates away from blank (or times out)
-      const start = Date.now();
-      const timer = setInterval(() => {
-        try {
-          if (win.closed || win.location.href !== "about:blank" || Date.now() - start > 30000) {
-            clearInterval(timer);
-            setLoading(false);
-          }
-        } catch {
-          clearInterval(timer);
-          setLoading(false);
-        }
-      }, 300);
-    } else {
+    setLoading(true);
+    const win = window.open(href, "_blank");
+    if (!win) {
       // Fallback: direct navigation (pop-up blocked)
       window.location.href = href;
     }
+    // Show spinner for 30 seconds max (PDF conversion takes ~10-20s)
+    setTimeout(() => setLoading(false), 30000);
   }
 
   return (
