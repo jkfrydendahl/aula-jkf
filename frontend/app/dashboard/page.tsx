@@ -4,6 +4,41 @@ import { useState, useEffect, useRef } from "react";
 import DOMPurify from "dompurify";
 import { api, Child, Presence, PickupResponsible, GoHomeWithChild, Message, ThreadDetail, Post, VacationRegistration } from "@/lib/api";
 
+const OFFICE_PROTOCOL: Record<string, string> = {
+  doc: "ms-word", docx: "ms-word",
+  xls: "ms-excel", xlsx: "ms-excel",
+  ppt: "ms-powerpoint", pptx: "ms-powerpoint",
+};
+
+function openOfficeAttachment(url: string, name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  const protocol = OFFICE_PROTOCOL[ext];
+
+  if (!protocol) {
+    window.open(url, "_blank");
+    return;
+  }
+
+  const deepLink = `${protocol}:ofe|u|${url}`;
+  const onlineViewer = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`;
+
+  // Try native app via deep link
+  window.location.href = deepLink;
+
+  // If the native app opened, the page will be hidden — cancel the fallback
+  const fallback = setTimeout(() => {
+    window.open(onlineViewer, "_blank");
+  }, 1500);
+
+  const onVisibility = () => {
+    if (document.hidden) {
+      clearTimeout(fallback);
+      document.removeEventListener("visibilitychange", onVisibility);
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+}
+
 // Toast notification type
 interface Toast {
   id: number;
@@ -806,18 +841,31 @@ export default function DashboardPage() {
                       />
                       {m.attachments && m.attachments.length > 0 && (
                         <div className="mt-3 space-y-1">
-                          {m.attachments.map((att) => (
-                            <a
-                              key={att.id}
-                              href={att.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
-                            >
-                              <span className="text-gray-400 dark:text-gray-500">📎</span>
-                              {att.name}
-                            </a>
-                          ))}
+                          {m.attachments.map((att) => {
+                            const ext = att.name.split(".").pop()?.toLowerCase() ?? "";
+                            const isOffice = ext in OFFICE_PROTOCOL;
+                            return isOffice ? (
+                              <button
+                                key={att.id}
+                                onClick={() => openOfficeAttachment(att.url, att.name)}
+                                className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
+                              >
+                                <span className="text-gray-400 dark:text-gray-500">📎</span>
+                                {att.name}
+                              </button>
+                            ) : (
+                              <a
+                                key={att.id}
+                                href={att.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
+                              >
+                                <span className="text-gray-400 dark:text-gray-500">📎</span>
+                                {att.name}
+                              </a>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -919,18 +967,31 @@ export default function DashboardPage() {
                 />
                 {selectedPost.attachments.length > 0 && (
                   <div className="mt-4 space-y-1">
-                    {selectedPost.attachments.map((att) => (
-                      <a
-                        key={att.id}
-                        href={att.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
-                      >
-                        <span className="text-gray-400 dark:text-gray-500">📎</span>
-                        {att.name}
-                      </a>
-                    ))}
+                    {selectedPost.attachments.map((att) => {
+                      const ext = att.name.split(".").pop()?.toLowerCase() ?? "";
+                      const isOffice = ext in OFFICE_PROTOCOL;
+                      return isOffice ? (
+                        <button
+                          key={att.id}
+                          onClick={() => openOfficeAttachment(att.url, att.name)}
+                          className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
+                        >
+                          <span className="text-gray-400 dark:text-gray-500">📎</span>
+                          {att.name}
+                        </button>
+                      ) : (
+                        <a
+                          key={att.id}
+                          href={att.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
+                        >
+                          <span className="text-gray-400 dark:text-gray-500">📎</span>
+                          {att.name}
+                        </a>
+                      );
+                    })}
                   </div>
                 )}
               </div>
