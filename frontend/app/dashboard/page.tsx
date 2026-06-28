@@ -14,6 +14,55 @@ function getAttachmentHref(url: string, name: string): string {
   return url;
 }
 
+function AttachmentLink({ url, name }: { url: string; name: string }) {
+  const [loading, setLoading] = useState(false);
+  const href = getAttachmentHref(url, name);
+
+  function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    if (loading) return;
+    const win = window.open("", "_blank");
+    if (win) {
+      setLoading(true);
+      win.location.href = href;
+      // Poll until the new tab navigates away from blank (or times out)
+      const start = Date.now();
+      const timer = setInterval(() => {
+        try {
+          if (win.closed || win.location.href !== "about:blank" || Date.now() - start > 30000) {
+            clearInterval(timer);
+            setLoading(false);
+          }
+        } catch {
+          clearInterval(timer);
+          setLoading(false);
+        }
+      }, 300);
+    } else {
+      // Fallback: direct navigation (pop-up blocked)
+      window.location.href = href;
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline disabled:opacity-60"
+    >
+      {loading ? (
+        <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+      ) : (
+        <span className="text-gray-400 dark:text-gray-500">📎</span>
+      )}
+      {name}
+    </button>
+  );
+}
+
 // Toast notification type
 interface Toast {
   id: number;
@@ -817,16 +866,7 @@ export default function DashboardPage() {
                       {m.attachments && m.attachments.length > 0 && (
                         <div className="mt-3 space-y-1">
                           {m.attachments.map((att) => (
-                            <a
-                              key={att.id}
-                              href={getAttachmentHref(att.url, att.name)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
-                            >
-                              <span className="text-gray-400 dark:text-gray-500">📎</span>
-                              {att.name}
-                            </a>
+                            <AttachmentLink key={att.id} url={att.url} name={att.name} />
                           ))}
                         </div>
                       )}
@@ -930,16 +970,7 @@ export default function DashboardPage() {
                 {selectedPost.attachments.length > 0 && (
                   <div className="mt-4 space-y-1">
                     {selectedPost.attachments.map((att) => (
-                      <a
-                        key={att.id}
-                        href={getAttachmentHref(att.url, att.name)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
-                      >
-                        <span className="text-gray-400 dark:text-gray-500">📎</span>
-                        {att.name}
-                      </a>
+                      <AttachmentLink key={att.id} url={att.url} name={att.name} />
                     ))}
                   </div>
                 )}
