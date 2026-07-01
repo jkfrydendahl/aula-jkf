@@ -521,7 +521,22 @@ class AulaClient:
     def _apply_token_to_session(self, access_token):
         """Initialize session for API calls. Token is passed as query parameter, not header."""
         if not self._session:
+            from requests.adapters import HTTPAdapter
+            from urllib3.util.retry import Retry
             self._session = requests.Session()
+            # Retry on connection errors (e.g. stale keep-alive connections that the
+            # server closed while the pool was idle — RemoteDisconnected / ConnectionError).
+            retry = Retry(
+                total=3,
+                connect=3,
+                read=2,
+                backoff_factor=0.3,
+                allowed_methods=None,  # retry on all HTTP methods
+                raise_on_status=False,
+            )
+            adapter = HTTPAdapter(max_retries=retry)
+            self._session.mount("https://", adapter)
+            self._session.mount("http://", adapter)
 
         # Don't set Authorization header - Aula API expects token as query parameter
         # Setting both causes 400 Bad Request errors
